@@ -148,8 +148,11 @@ test('pause, hints and the away notice', async ({ page }) => {
   const hint = page.getByRole('button', { name: /hint/i });
   await expect(hint).toContainText('−3 points');
   await hint.focus();
+  // two clues are true by now: the shop's new build in the changes, and Priya's word that she shipped it
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').filter({ hasText: /^Hint:/ })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /^Hint:.*new build just before/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').filter({ hasText: /^Hint:.*Priya put out/ })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status').filter({ hasText: 'No more hints' })).toBeVisible();
 

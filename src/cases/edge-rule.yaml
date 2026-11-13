@@ -57,13 +57,14 @@ timeline:
         all:
           - { metric: filter.flag:rules, op: "==", value: "412" }
           - { metric: filter.enabled, op: "==", value: true }
-  - { at: 300, kind: message, from: boss, lineKey: boss_attack }
+  # the stakeholder speaks only while most requests are failing, never after the city is back
+  - { at: 300, kind: message, from: boss, lineKey: boss_attack, when: { metric: city.errorRate, op: ">", value: 0.5 } }
   - at: 420
     kind: deploy
     target: orders
     label: orders 7.3.1 (wording fixes)
     modifier: { target: orders, flags: { build: "7.3.1" } }
-  - { at: 540, kind: message, from: boss, lineKey: boss_still_down }
+  - { at: 540, kind: message, from: boss, lineKey: boss_still_down, when: { metric: city.errorRate, op: ">", value: 0.5 } }
 
 actions:
   - id: filter_off
@@ -167,13 +168,13 @@ clues:
     when: { metric: edge.saturation, op: ">", value: 0.95 }
     weight: 10
     key: true
-    text: Every edge machine is out of CPU at once, in every part of the city. Nothing else is close to its limit.
+    text: Every edge machine is out of CPU at once, in every part of the city.
   - id: deploy_before
     route: changes
     when: { metric: filter.flag:rules, op: "==", value: "412" }
     weight: 9
     key: true
-    text: Rules update 412 went out to the filter two seconds before the edge ran out of CPU. It reached every edge machine in one step.
+    text: Rules update 412 went out to the filter and reached every edge machine in one step.
   - id: volume_normal
     route: ask:netops:volume
     when: { metric: city.tick, op: ">=", value: 242 }
@@ -181,7 +182,12 @@ clues:
     text: Traffic volume is normal and comes from the usual places. This does not look like an attack.
   - id: orders_fine
     route: graph:orders.errorRate
-    when: { metric: orders.errorRate, op: "<", value: 0.01 }
+    # only once the fault shows, so there is a usual day to compare with (orders gets 400 a second on one)
+    when:
+      all:
+        - { metric: edge.saturation, op: ">", value: 0.95 }
+        - { metric: orders.errorRate, op: "<", value: 0.01 }
+        - { metric: orders.arrivals, op: "<", value: 380 }
     weight: 3
     text: The orders service is not failing. It sees fewer requests than usual, not more.
   - id: edge_cpu_report
@@ -193,7 +199,7 @@ clues:
     route: ask:netops:network
     when: { metric: city.tick, op: ">=", value: 242 }
     weight: 2
-    text: Nobody changed the network today.
+    text: Nobody on the network team changed anything today.
   - id: rules_today
     route: ask:devlead:shipped
     # the deploy's own tick; the rules flag alone would read false again after rollback_rules clears it
@@ -207,7 +213,11 @@ clues:
     text: The orders deploy only changed some wording on the order page. It does not touch how orders are handled.
   - id: db_quiet
     route: ask:devlead:db
-    when: { metric: edge.saturation, op: ">", value: 0.95 }
+    # the database gets 1,000 a second on a usual day
+    when:
+      all:
+        - { metric: edge.saturation, op: ">", value: 0.95 }
+        - { metric: db.arrivals, op: "<", value: 950 }
     weight: 2
     text: The database is quieter than usual.
 
@@ -288,7 +298,7 @@ cast:
         reveals: edge_cpu_report
       - id: network
         label: Did anything change on the network?
-        answer: No network changes today. I checked.
+        answer: No network changes from my team today. I checked.
         answerBefore: Nothing is broken, so I have not looked.
         reveals: no_network_change
   - id: devlead
@@ -322,15 +332,15 @@ cast:
 lines:
   busy_netops: Give me a minute, I am in the middle of something. Use the questions below for now.
   busy_devlead: Can't talk right now, I am pulling up the deploy list. Pick a question below and I will answer that.
-  boss_attack: Customers say the whole site is down. Are we being attacked? What do I tell them?
+  boss_attack: Customers say the site is down. Are we being attacked? What do I tell them?
   boss_still_down: It is still down for most people. I need an update I can pass on.
   filter_off_done: The filter is off on every edge machine. Requests go through unchecked for now.
-  rollback_rules_done: Rules update 412 has been rolled back everywhere. The filter is checking requests with yesterday's rules.
-  restart_edge_bad: Half the edge machines went down to restart and came back still out of CPU. Fewer machines, same problem.
+  rollback_rules_done: Rules update 412 has been rolled back everywhere. The filter now has yesterday's rules.
+  restart_edge_bad: Half the edge machines went down to restart at once. The edge serves less until they warm up.
   block_sources_bad: The gate is turning away a third of visitors, all of them real customers, and the edge now checks every request against the new block list too.
-  unblock_sources_done: The block at the gate is lifted. Visitors are let in again.
+  unblock_sources_done: There is no block at the gate now. Every visitor is let in.
   scale_api_done: The api has twice the servers now. It was not busy before, and it is not busy now.
-  rollback_orders_bad: The orders service restarted to roll back and is running short-handed while it warms up. The wording fixes are gone too.
+  rollback_orders_bad: The orders service restarted to roll back and is running short-handed while it warms up.
   nudge: I have not heard anything new in a while, and customers keep asking. Can you give me something to post?
   update_ack_honest: Thanks, that is clear. I will post it as it is.
   update_ack_spin: Oh good, that is easy to explain. Sending it out now.

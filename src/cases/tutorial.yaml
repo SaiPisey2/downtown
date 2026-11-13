@@ -31,7 +31,7 @@ timeline:
       target: shop
       mul: { capacityMul: 0.5 }
       while: { metric: shop.flag:build, op: "==", value: v2 }
-  - { at: 16, kind: message, from: priya, lineKey: priya_ping }
+  - { at: 16, kind: message, from: priya, lineKey: priya_ping, when: { metric: city.errorRate, op: ">", value: 0.05 } }
 actions:
   - id: rollback
     target: shop
@@ -65,10 +65,19 @@ lose:
 clues:
   - id: new_build
     route: changes
-    when: { metric: shop.flag:build, op: "==", value: v2 }
+    # once orders are failing, so the line's "just before" is already true
+    when:
+      all:
+        - { metric: shop.flag:build, op: "==", value: v2 }
+        - { metric: city.errorRate, op: ">", value: 0.01 }
     weight: 8
     key: true
     text: The shop got a new build just before the orders started to fail.
+  - id: build_today
+    route: ask:priya:changed
+    when: { metric: city.tick, op: ">=", value: 12 }
+    weight: 4
+    text: Priya put out a new shop build today.
 updates:
   - { id: investigating, label: We know orders are failing and we are looking into it., honest: true }
   - { id: cause_found, label: The shop's latest build looks like the cause. We are rolling it back., honest: true }
@@ -102,14 +111,16 @@ cast:
     name: Priya
     role: teammate
     persona: Calm shop developer who ships often and owns up when it goes wrong.
-    knows: [new_build]
+    knows: [new_build, build_today]
     questions:
       - id: changed
         label: Did anything change today?
         answer: I put out a new shop build a little while ago. It should be fine, but check the timing.
+        answerBefore: Not yet. A new shop build is about to go out.
+        reveals: build_today
       - id: ledger
         label: Is the ledger okay?
-        answer: The ledger looks quiet to me. I would leave it alone.
+        answer: I have not touched the ledger today. I would leave it alone.
   - id: dana
     name: Dana
     role: stakeholder

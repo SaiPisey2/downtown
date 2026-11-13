@@ -128,7 +128,7 @@ describe('reference checks', () => {
   });
   it('accepts a graph route that is graphed', () => {
     const doc = mutate((d) => d.clues.push({ id: 'q', route: 'graph:shop.queue', weight: 1, text: 'x' }));
-    expect(parseCase(doc, PATH).clues).toHaveLength(2);
+    expect(parseCase(doc, PATH).clues.map((x) => x.id)).toContain('q');
   });
   it('fails a log route for a node without log rules', () => {
     expectFail((d) => d.clues.push({ id: 'lg', route: 'log:gate', weight: 1, text: 'x' }), 'lg', 'gate');
@@ -140,7 +140,7 @@ describe('reference checks', () => {
       d.clues.push({ id: 'a3', route: 'ask:priya:ledger', weight: 1, text: 'x' });
       d.cast[0].questions[1].reveals = 'a3';
     });
-    expect(parseCase(ok, PATH).clues).toHaveLength(2);
+    expect(parseCase(ok, PATH).clues.map((x) => x.id)).toContain('a3');
   });
   it('fails on unknown reveals, knows, and scoring actions', () => {
     expectFail((d) => (d.cast[0].questions[0].reveals = 'ghost'), 'ghost');
@@ -263,6 +263,8 @@ describe('case registry', () => {
 
 describe('answers that depend on time', () => {
   const withBefore = (d: Doc) => {
+    d.clues = d.clues.filter((x: Doc) => x.id !== 'build_today');
+    d.cast[0].knows = ['new_build'];
     d.cast[0].questions[0].reveals = 'new_build';
     d.cast[0].questions[0].answerBefore = 'Nothing has shipped yet.';
   };
