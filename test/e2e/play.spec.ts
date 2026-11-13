@@ -75,15 +75,22 @@ test('the tutorial is played to a win from the keyboard', async ({ page }) => {
   // focus is back on the button that opened the dialog
   await expect(rollback).toBeFocused();
 
-  // pressing the same action again at once is refused in plain words, and there is still one countdown
+  // pressing the same action again at once is refused in plain words, and there is still one countdown;
+  // paused, so the first rollback cannot land in between however slow the machine is
+  await page.evaluate(() => window.__downtown!.state().setPaused(true, 'user'));
   await page.keyboard.press('Enter');
   await press(page, 'Confirm');
   await expect(panel.getByText('That is already in progress')).toBeVisible();
   await expect(panel.getByText(/lands in/i)).toHaveCount(1);
   await expect(hud.getByText(/lands in/i)).toHaveCount(1);
+  await page.evaluate(() => window.__downtown!.state().setPaused(false));
 
   await expect.poll(() => status(page), { timeout: 20_000 }).toBe('won');
   await expect(page.getByText('Recovered')).toBeVisible();
+  // once the run is over, nothing that acts on it can be pressed
+  await expect(hud.getByRole('button', { name: /hint/i })).toBeDisabled();
+  await expect(hud.getByRole('button', { name: /pause|resume/i })).toBeDisabled();
+  await expect(rollback).toBeDisabled();
   expect(errors).toEqual([]);
 });
 
@@ -96,7 +103,9 @@ test('arrow keys inside the panel move between tabs and leave the camera alone',
   await expect(panel).toBeVisible();
 
   const cam = () => page.evaluate(() => window.__downtown!.camera());
-  // let the camera finish easing onto the gate
+  // let the camera finish easing onto the gate, at world (0, 0, 0); a still camera alone is not enough,
+  // since the ease may not have started on the first frames
+  await expect.poll(async () => Math.hypot(...(await cam()).target), { timeout: 10_000 }).toBeLessThan(0.05);
   let before = await cam();
   for (let i = 0; i < 40; i++) {
     await page.waitForTimeout(250);
@@ -173,5 +182,55 @@ test('watching the edge graph for a second finds the clue', async ({ page }) => 
 
   await press(page, /notebook/i);
   await expect(page.getByRole('complementary', { name: /notebook/i })).toContainText('Every edge machine is out of CPU');
+  expect(errors).toEqual([]);
+});
+
+test('a look counts once per panel opening, however often its tab comes back', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = collectErrors(page);
+  await start(page, 'edge-rule');
+  await page.evaluate(() => {
+    const h = window.__downtown!;
+    h.setSpeed(320);
+    h.advance(250);
+    h.setSpeed(1);
+  });
+  const looks = (route: string) =>
+    page.evaluate((r) => window.__downtown!.state().run!.inputs.filter((i) => i.kind === 'observe' && i.route === r).length, route);
+  await page.getByRole('button', { name: 'Edge', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: /edge building/i });
+  await expect.poll(() => looks('graph:edge.saturation'), { timeout: 5_000 }).toBe(1);
+  for (const t of ['Logs', 'Changes', 'Graphs', 'Logs', 'Changes', 'Graphs']) {
+    await panel.getByRole('tab', { name: t }).click();
+    await expect(panel.getByRole('tab', { name: t })).toHaveAttribute('aria-selected', 'true');
+  }
+  // longer than a graph needs to count as looked at
+  await page.waitForTimeout(1500);
+  expect(await looks('graph:edge.saturation')).toBe(1);
+  expect(await looks('log:edge')).toBe(1);
+  expect(await looks('changes')).toBe(1);
+
+  // a new opening counts again
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edge', exact: true }).click();
+  await panel.getByRole('tab', { name: 'Logs' }).click();
+  await expect.poll(() => looks('log:edge')).toBe(2);
+  expect(errors).toEqual([]);
+});
+
+test('coming back to the play screen starts with a clean interface', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page, 'tutorial');
+  await press(page, /notebook/i);
+  await expect(page.getByRole('complementary', { name: /notebook/i })).toBeVisible();
+  await press(page, /^team/i);
+  await expect(page.getByRole('complementary', { name: /team chat/i })).toBeVisible();
+  // leave the play screen and come back to a new run
+  await page.evaluate(() => window.__downtown!.state().finish());
+  await expect(page.getByRole('banner')).toHaveCount(0);
+  await page.evaluate(() => window.__downtown!.state().start('tutorial'));
+  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.getByRole('complementary')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

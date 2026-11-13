@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { cases } from '../../cases';
 import type { CaseFile } from '../../cases';
@@ -27,23 +27,19 @@ const KIND_WORD: Record<CaseFile['layout'][string]['kind'], string> = {
   queue: 'Queue',
 };
 
-function Graphs({ c, node }: { c: CaseFile; node: NodeId }) {
+/** Records a look at a route at most once per panel opening, however often its tab is shown again. */
+type ObserveOnce = (route: string) => void;
+
+function Graphs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: ObserveOnce }) {
   const history = useGame((s) => s.history);
   const paused = useGame((s) => s.paused);
   const running = useGame((s) => s.snap?.status === 'running');
-  const observe = useGame((s) => s.observe);
   const metrics = c.signals.graphs[node] ?? [];
-  // per panel opening: the panel is keyed by selection, so this resets with it
-  const seen = useRef(new Set<string>());
 
   useEffect(() => {
     if (paused || !running) return;
     const t = setTimeout(() => {
-      for (const m of metrics) {
-        if (seen.current.has(m)) continue;
-        seen.current.add(m);
-        observe(`graph:${node}.${m}`);
-      }
+      for (const m of metrics) observe(`graph:${node}.${m}`);
     }, GRAPH_LOOK_MS);
     return () => clearTimeout(t);
   }, [paused, running, metrics, node, observe]);
@@ -59,10 +55,9 @@ function Graphs({ c, node }: { c: CaseFile; node: NodeId }) {
   );
 }
 
-function Logs({ c, node }: { c: CaseFile; node: NodeId }) {
+function Logs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: ObserveOnce }) {
   const snap = useGame((s) => s.snap);
   const seed = useGame((s) => s.run?.seed ?? 0);
-  const observe = useGame((s) => s.observe);
   useEffect(() => observe(`log:${node}`), [node, observe]);
   const lines = useMemo(() => (snap ? logLines(c, node, snap, seed) : []), [c, node, snap, seed]);
   if (lines.length === 0) return <p className="empty">Nothing in this building's log right now.</p>;
@@ -83,8 +78,7 @@ function Logs({ c, node }: { c: CaseFile; node: NodeId }) {
   );
 }
 
-function Changes({ node }: { node: NodeId }) {
-  const observe = useGame((s) => s.observe);
+function Changes({ node, observe }: { node: NodeId; observe: ObserveOnce }) {
   useEffect(() => observe('changes'), [observe]);
   return <ChangeList only={node} empty="No changes to this building yet." />;
 }
@@ -92,6 +86,7 @@ function Changes({ node }: { node: NodeId }) {
 function Actions({ c, node }: { c: CaseFile; node: NodeId }) {
   const tick = useGame((s) => s.snap?.tick ?? 0);
   const pending = useGame((s) => s.snap?.pending);
+  const ended = useGame((s) => s.snap?.status !== 'running');
   const askConfirm = useUi((s) => s.askConfirm);
   const refusals = useUi((s) => s.refusals);
   const actions = c.actions.filter((a) => a.target === node);
@@ -102,7 +97,7 @@ function Actions({ c, node }: { c: CaseFile; node: NodeId }) {
         const p = pending?.find((x) => x.actionId === a.id);
         return (
           <li key={a.id} className="action">
-            <button type="button" className="btn btn-action" onClick={(e) => askConfirm(a.id, e.currentTarget)}>
+            <button type="button" className="btn btn-action" disabled={ended} onClick={(e) => askConfirm(a.id, e.currentTarget)}>
               {a.label}
             </button>
             <p className="action-meta">
@@ -146,6 +141,13 @@ export function BuildingPanel({ node, onClose }: { node: NodeId; onClose(): void
   const c = caseId ? cases[caseId] : undefined;
   const [tab, setTab] = useState<Tab>('Graphs');
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  // the panel is keyed by selection, so this is per opening; repeat looks would only bloat the replay inputs
+  const seen = useRef(new Set<string>());
+  const observeOnce = useCallback<ObserveOnce>((route) => {
+    if (seen.current.has(route)) return;
+    seen.current.add(route);
+    useGame.getState().observe(route);
+  }, []);
   if (!c) return null;
   const info = c.layout[node];
   const name = info?.name ?? node;
@@ -202,9 +204,9 @@ export function BuildingPanel({ node, onClose }: { node: NodeId; onClose(): void
         ))}
       </div>
       <div className="dock-body" role="tabpanel" id={`${base}-body`} aria-labelledby={`${base}-tab-${tab}`} tabIndex={0}>
-        {tab === 'Graphs' && <Graphs c={c} node={node} />}
-        {tab === 'Logs' && <Logs c={c} node={node} />}
-        {tab === 'Changes' && <Changes node={node} />}
+        {tab === 'Graphs' && <Graphs c={c} node={node} observe={observeOnce} />}
+        {tab === 'Logs' && <Logs c={c} node={node} observe={observeOnce} />}
+        {tab === 'Changes' && <Changes node={node} observe={observeOnce} />}
         {tab === 'Actions' && <Actions c={c} node={node} />}
       </div>
     </aside>

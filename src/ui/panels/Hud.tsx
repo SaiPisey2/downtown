@@ -40,9 +40,13 @@ export function Hud() {
   const { setPaused, hint, goHome } = useGame.getState();
   const overlay = useUi((s) => s.overlay);
   const openOverlay = useUi((s) => s.openOverlay);
+  const chatOpen = useUi((s) => s.chatOpen);
+  const openChat = useUi((s) => s.openChat);
+  const unread = useUi((s) => Object.values(s.unread).reduce((a, b) => a + b, 0));
   const toast = useUi((s) => s.toast);
   const c = caseId ? cases[caseId] : undefined;
   if (!c || !snap) return null;
+  const ended = snap.status !== 'running';
 
   const askHint = () => {
     hint();
@@ -77,6 +81,23 @@ export function Hud() {
         <button
           type="button"
           className="btn btn-hud"
+          data-opens="chat"
+          aria-pressed={chatOpen}
+          onClick={() => openChat(!chatOpen)}
+          title="Talk to your team"
+        >
+          Team
+          {unread > 0 && (
+            <span className="count count-new">
+              {unread}
+              <span className="sr-only"> new</span>
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          className="btn btn-hud"
+          disabled={ended}
           aria-keyshortcuts="P"
           onClick={() => setPaused(!paused, 'user')}
           title={paused ? 'Resume (P)' : 'Pause (P)'}
@@ -84,7 +105,13 @@ export function Hud() {
           {paused ? <PlayIcon /> : <PauseIcon />}
           {paused ? 'Resume' : 'Pause'}
         </button>
-        <button type="button" className="btn btn-hud" onClick={askHint} title="Shows one clue you have not found. Costs 3 points.">
+        <button
+          type="button"
+          className="btn btn-hud"
+          disabled={ended}
+          onClick={askHint}
+          title="Shows one clue you have not found. Costs 3 points."
+        >
           Hint <span className="cost">−3 points</span>
         </button>
         <button type="button" className="btn btn-hud" aria-keyshortcuts="H" onClick={goHome} title="Home view (H)">

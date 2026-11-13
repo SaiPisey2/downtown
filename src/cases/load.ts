@@ -1,6 +1,6 @@
 import { parse } from 'yaml';
 import type { Cond } from '../sim';
-import { NODE_VIEW_KEYS, caseSchema, type CaseFile } from './schema';
+import { NODE_VIEW_KEYS, STAKEHOLDER_LINES, caseSchema, type CaseFile } from './schema';
 
 export class CaseError extends Error {
   readonly path: string;
@@ -97,6 +97,10 @@ function check(c: CaseFile): string[] {
     if (ev.kind === 'modify' && !ev.modifier) issues.push(`${w}: modify needs a modifier`);
     if (ev.modifier) needNode(ev.modifier.target, `${w} modifier`);
   });
+
+  const stakeholders = c.cast.filter((m) => m.role === 'stakeholder');
+  if (stakeholders.length > 1) issues.push(`at most one stakeholder, got ${stakeholders.map((m) => m.id).join(', ')}`);
+  if (stakeholders.length) for (const k of STAKEHOLDER_LINES) lineKey(k, `stakeholder "${stakeholders[0]!.id}"`);
 
   for (const a of c.actions) {
     needNode(a.target, `action "${a.id}"`);

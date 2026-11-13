@@ -5,6 +5,7 @@ import edgeRuleYaml from './edge-rule.yaml?raw';
 
 export { CaseError, parseCase } from './load';
 export { answerFor } from './answer';
+export { STAKEHOLDER_LINES } from './schema';
 export type { CaseFile } from './schema';
 
 /** Parses every case file and indexes it by id; two files with one id is an error. */

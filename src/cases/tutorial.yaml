@@ -110,9 +110,20 @@ cast:
       - id: ledger
         label: Is the ledger okay?
         answer: The ledger looks quiet to me. I would leave it alone.
+  - id: dana
+    name: Dana
+    role: stakeholder
+    persona: Runs the shop's customer desk. Wants to tell customers what is going on.
+    knows: []
+    questions: []
 lines:
-  priya_ping: Priya - orders are timing out on my side. Can you look at the shop?
+  priya_ping: Orders are timing out on my side. Can you look at the shop?
   restart_bad: Restarting the ledger dropped the orders it was writing. Nothing improved.
+  nudge: Customers are asking about their orders. What should I tell them?
+  update_ack_honest: Thanks. I will pass that on to the customers who wrote in.
+  update_ack_spin: Great, that is what they want to hear. Sending it now.
+  outcome_won: Orders are going through again. Thanks for sorting it out.
+  outcome_lost: Orders are still failing. I will tell customers we are still on it.
 debrief:
   happened: A new build of the shop could handle only half as many orders. Orders piled up and then got dropped until the build was rolled back.
   realTeam: A real team would look at what changed just before the trouble began, and roll that change back before digging deeper.

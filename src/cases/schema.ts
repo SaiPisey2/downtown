@@ -32,10 +32,13 @@ export interface CaseFile extends CaseModel {
       answerBefore?: string;
     }[];
   }[];
-  /** scripted lines by key (timeline messages, consequences) */
+  /** scripted lines by key (timeline messages, consequences, and the stakeholder's STAKEHOLDER_LINES) */
   lines: Record<string, string>;
   debrief: { happened: string; realTeam: string; fictionNote: string };
 }
+
+/** Lines every case with a stakeholder must have: the nudge for a missed update, the two acknowledgements, the outcome. */
+export const STAKEHOLDER_LINES = ['nudge', 'update_ack_honest', 'update_ack_spin', 'outcome_won', 'outcome_lost'] as const;
 
 const o = z.strictObject;
 const num = z.number(); // zod rejects NaN and infinities

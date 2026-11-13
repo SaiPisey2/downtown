@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { createRun } from '../sim';
-import { CaseError, answerFor, buildCases, cases, parseCase } from './index';
+import { CaseError, STAKEHOLDER_LINES, answerFor, buildCases, cases, parseCase } from './index';
 
 const text = readFileSync(new URL('./tutorial.yaml', import.meta.url), 'utf8');
 const PATH = 'tutorial.yaml';
@@ -86,6 +86,19 @@ describe('reference checks', () => {
   it('fails on a missing scripted line', () => {
     expectFail((d) => delete d.lines.priya_ping, 'priya_ping');
     expectFail((d) => delete d.lines.restart_bad, 'restart_bad');
+  });
+  it('a case with a stakeholder needs every stakeholder line, and has only one stakeholder', () => {
+    for (const k of STAKEHOLDER_LINES) expectFail((d) => delete d.lines[k], `stakeholder "dana"`, `missing line "${k}"`);
+    expectFail((d) => d.cast.push({ ...d.cast[1], id: 'dana2' }), 'at most one stakeholder', 'dana, dana2');
+    // without a stakeholder the lines are not needed
+    const c = parseCase(
+      mutate((d) => {
+        d.cast = d.cast.filter((m: Doc) => m.role !== 'stakeholder');
+        for (const k of STAKEHOLDER_LINES) delete d.lines[k];
+      }),
+      PATH,
+    );
+    expect(c.cast.every((m) => m.role === 'teammate')).toBe(true);
   });
   it('fails on an action aimed at a missing node', () => {
     expectFail((d) => (d.actions[0].target = 'harbour'), 'harbour', 'rollback');

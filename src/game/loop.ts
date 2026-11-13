@@ -1,6 +1,6 @@
 import { cases } from '../cases';
 import type { Run, Snapshot } from '../sim';
-import { useGame } from './store';
+import { offerTick, useGame } from './store';
 
 const HISTORY = 120;
 const MAX_REAL_MS = 250;
@@ -57,6 +57,7 @@ export function advance(realDtMs: number): void {
     prev = run.snapshot;
     run.step(1);
     pushHistory(history, run.snapshot);
+    offerTick(run);
     whole--;
     acc -= 1;
   }

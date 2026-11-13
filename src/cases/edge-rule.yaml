@@ -318,8 +318,8 @@ cast:
     questions: []
 
 lines:
-  boss_attack: Ruth - Customers say the whole site is down. Are we being attacked? What do I tell them?
-  boss_still_down: Ruth - It is still down for most people. I need an update I can pass on.
+  boss_attack: Customers say the whole site is down. Are we being attacked? What do I tell them?
+  boss_still_down: It is still down for most people. I need an update I can pass on.
   filter_off_done: The filter is off on every edge machine. Requests go through unchecked for now.
   rollback_rules_done: Rules update 412 has been rolled back everywhere. The filter is checking requests with yesterday's rules.
   restart_edge_bad: Half the edge machines went down to restart and came back still out of CPU. Fewer machines, same problem.
@@ -327,6 +327,11 @@ lines:
   unblock_sources_done: The block at the gate is lifted. Visitors are let in again.
   scale_api_done: The api has twice the servers now. It was not busy before, and it is not busy now.
   rollback_orders_bad: The orders service restarted to roll back and is running short-handed while it warms up. The wording fixes are gone too.
+  nudge: I have not heard anything new in a while, and customers keep asking. Can you give me something to post?
+  update_ack_honest: Thanks, that is clear. I will post it as it is.
+  update_ack_spin: Oh good, that is easy to explain. Sending it out now.
+  outcome_won: The site is back for customers. Thank you. I will let them know it is fixed.
+  outcome_lost: Customers are still seeing errors, and I have to tell them we do not know when it will be fixed.
 
 debrief:
   happened: >-
