@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { answerFor, cases } from '../cases';
 import { cleanText, makeCast, scriptedCast } from '../cast';
 import type { Cast, CastHooks, ChatLine } from '../cast';
-import { createRun } from '../sim';
+import { createRun, findableClues } from '../sim';
 import type { GameEvent, NodeId, PlayerInput, Run, Snapshot } from '../sim';
 import { MAIN_CASE, TUTORIAL_CASE, markTutorialDone } from './flow';
 import { sharedInputs } from './share';
@@ -57,6 +57,7 @@ export interface GameState {
   /** Runs a replay to its end at once and opens its debrief. */
   skipReplay(): void;
   act(id: string): void;
+  /** Looks at a route; recorded only when it finds a clue, so a view on screen may call it on every tick. */
   observe(route: string): void;
   update(id: string): void;
   hint(): void;
@@ -348,8 +349,12 @@ export const useGame = create<GameState>()((set, get) => ({
     set({ lastAction: r.ok ? { id, ok: true } : { id, ok: false, reason: r.reason }, ...view(run) });
   },
   observe(route) {
-    const run = get().run;
-    if (!run || get().replaying) return;
+    const s = get();
+    const run = s.run;
+    const c = s.caseId ? cases[s.caseId] : undefined;
+    if (!run || !c || s.replaying || run.snapshot.status !== 'running') return;
+    // only a look that finds something is recorded, so a view on screen can look on every tick
+    if (findableClues(c, route, run.snapshot, s.found).length === 0) return;
     run.observe(route);
     set(view(run));
   },
@@ -388,7 +393,11 @@ export const useGame = create<GameState>()((set, get) => ({
     const tick = snap.tick;
     const fallback = q ? answerFor(c, castId, q.id, snap) : (c.lines[`busy_${castId}`] ?? '');
     s.say(said, castId);
-    if (q?.reveals && !get().found.includes(q.reveals)) get().observe(`ask:${castId}:${q.id}`);
+    // a question is recorded even when it finds nothing yet, so a replay shows it being asked
+    if (q?.reveals && !get().found.includes(q.reveals)) {
+      run.observe(`ask:${castId}:${q.id}`);
+      set(view(run));
+    }
 
     const ctx = { c, snap, found: [...get().found], chat: get().chat };
     const id = addLine({ tick, from: castId, text: '', live: true });

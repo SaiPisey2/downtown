@@ -29,10 +29,11 @@ export function ChangeList({ only, empty }: { only?: NodeId; empty: string }) {
   );
 }
 
-/** The city-wide change log, in the right dock. Opening it counts as reading the changes. */
+/** The city-wide change log, in the right dock. While it is open, the changes count as read, new ones included. */
 export function ChangeLog({ onClose }: { onClose(): void }) {
   const observe = useGame((s) => s.observe);
-  useEffect(() => observe('changes'), [observe]);
+  const tick = useGame((s) => s.snap?.tick ?? 0);
+  useEffect(() => observe('changes'), [observe, tick]);
   return (
     <aside className="dock" aria-label="City change log">
       <header className="dock-head">

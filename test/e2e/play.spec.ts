@@ -185,37 +185,58 @@ test('watching the edge graph for a second finds the clue', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test('a look counts once per panel opening, however often its tab comes back', async ({ page }) => {
+/** Runs the simulation forward to `tick` in one step. */
+async function jumpTo(page: Page, t: number): Promise<void> {
+  await page.evaluate((to) => {
+    const h = window.__downtown!;
+    const now = h.state().snap!.tick;
+    if (to <= now) return;
+    h.setSpeed((to - now) / (0.25 * 4));
+    h.advance(250);
+    h.setSpeed(1);
+  }, t);
+}
+
+const looks = (page: Page, route: string) =>
+  page.evaluate((r) => window.__downtown!.state().run!.inputs.filter((i) => i.kind === 'observe' && i.route === r).length, route);
+
+test('graphs left open from before the fault find the key clue when it shows, with one recorded look', async ({ page }) => {
   test.setTimeout(60_000);
   const errors = collectErrors(page);
   await start(page, 'edge-rule');
-  await page.evaluate(() => {
-    const h = window.__downtown!;
-    h.setSpeed(320);
-    h.advance(250);
-    h.setSpeed(1);
-  });
-  const looks = (route: string) =>
-    page.evaluate((r) => window.__downtown!.state().run!.inputs.filter((i) => i.kind === 'observe' && i.route === r).length, route);
+  await jumpTo(page, 200);
   await page.getByRole('button', { name: 'Edge', exact: true }).click();
   const panel = page.getByRole('complementary', { name: /edge building/i });
-  await expect.poll(() => looks('graph:edge.saturation'), { timeout: 5_000 }).toBe(1);
-  for (const t of ['Logs', 'Changes', 'Graphs', 'Logs', 'Changes', 'Graphs']) {
-    await panel.getByRole('tab', { name: t }).click();
-    await expect(panel.getByRole('tab', { name: t })).toHaveAttribute('aria-selected', 'true');
-  }
-  // longer than a graph needs to count as looked at
+  await expect(panel.getByRole('img', { name: /saturation/i })).toBeVisible();
+  // longer than a graph needs to count as looked at; nothing to find yet, so nothing is recorded
   await page.waitForTimeout(1500);
-  expect(await looks('graph:edge.saturation')).toBe(1);
-  expect(await looks('log:edge')).toBe(1);
-  expect(await looks('changes')).toBe(1);
+  expect(await looks(page, 'graph:edge.saturation')).toBe(0);
+  expect(await page.evaluate(() => window.__downtown!.state().found)).toEqual([]);
 
-  // a new opening counts again
-  await page.keyboard.press('Escape');
-  await expect(panel).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edge', exact: true }).click();
-  await panel.getByRole('tab', { name: 'Logs' }).click();
-  await expect.poll(() => looks('log:edge')).toBe(2);
+  // the panel stays open while the fault arrives
+  await jumpTo(page, 260);
+  await expect.poll(() => page.evaluate(() => window.__downtown!.state().found), { timeout: 5_000 }).toContain('cpu_everywhere');
+  await expect(page.getByRole('status').filter({ hasText: 'Clue found' })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(await looks(page, 'graph:edge.saturation')).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('the change log left open across the deploy finds the deploy clue, with one recorded look', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = collectErrors(page);
+  await start(page, 'edge-rule');
+  await jumpTo(page, 200);
+  await press(page, /change log/i);
+  const log = page.getByRole('complementary', { name: /change log/i });
+  await expect(log).toContainText('Nothing has changed yet today.');
+  expect(await looks(page, 'changes')).toBe(0);
+
+  await jumpTo(page, 250);
+  await expect(log).toContainText('rules update 412');
+  await expect.poll(() => page.evaluate(() => window.__downtown!.state().found), { timeout: 5_000 }).toContain('deploy_before');
+  await page.waitForTimeout(1000);
+  expect(await looks(page, 'changes')).toBe(1);
   expect(errors).toEqual([]);
 });
 

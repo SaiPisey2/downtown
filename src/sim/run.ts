@@ -1,3 +1,4 @@
+import { findableClues } from './clues';
 import { evalCond } from './cond';
 import { emptyFlow, stepFlow, topoOrder } from './flow';
 import type { CaseModel, ClueDef, GameEvent, Modifier, NodeId, NodeParams, PlayerInput, RejectReason, Snapshot } from './types';
@@ -184,7 +185,7 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
     observe(route) {
       if (snap.status !== 'running') return [];
       inputs.push({ tick: snap.tick, kind: 'observe', route });
-      const fresh = model.clues.filter((c) => c.route === route && !found.has(c.id) && eligible(c));
+      const fresh = findableClues(model, route, snap, found);
       for (const c of fresh) {
         found.add(c.id);
         emit(snap.tick, { type: 'clue', clueId: c.id });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { cases } from '../../cases';
 import type { CaseFile } from '../../cases';
@@ -14,7 +14,7 @@ import { Sparkline } from './Sparkline';
 const TABS = ['Graphs', 'Logs', 'Changes', 'Actions'] as const;
 type Tab = (typeof TABS)[number];
 
-/** Real time a graph must stay on screen, unpaused, before it counts as looked at. */
+/** Real time a graph must stay on screen before it counts as looked at. */
 const GRAPH_LOOK_MS = 1000;
 
 const KIND_WORD: Record<CaseFile['layout'][string]['kind'], string> = {
@@ -27,22 +27,30 @@ const KIND_WORD: Record<CaseFile['layout'][string]['kind'], string> = {
   queue: 'Queue',
 };
 
-/** Records a look at a route at most once per panel opening, however often its tab is shown again. */
-type ObserveOnce = (route: string) => void;
+/** Looks at a route; the store records a look only when it finds a clue, so a view on screen calls it every tick. */
+type Look = (route: string) => void;
 
-function Graphs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: ObserveOnce }) {
+/** The current tick, so a view on screen looks again as the city changes. */
+const useTick = () => useGame((s) => s.snap?.tick ?? 0);
+
+function Graphs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: Look }) {
   const history = useGame((s) => s.history);
-  const paused = useGame((s) => s.paused);
   const running = useGame((s) => s.snap?.status === 'running' && !s.replaying);
-  const metrics = c.signals.graphs[node] ?? [];
+  const tick = useTick();
+  const metrics = useMemo(() => c.signals.graphs[node] ?? [], [c, node]);
+  // graphs count as looked at once they have been on screen for a moment (paused or not, like
+  // logs and changes); from then on they are looked at again on every tick while they stay
+  const [looked, setLooked] = useState(false);
 
   useEffect(() => {
-    if (paused || !running) return;
-    const t = setTimeout(() => {
-      for (const m of metrics) observe(`graph:${node}.${m}`);
-    }, GRAPH_LOOK_MS);
+    if (looked || !running) return;
+    const t = setTimeout(() => setLooked(true), GRAPH_LOOK_MS);
     return () => clearTimeout(t);
-  }, [paused, running, metrics, node, observe]);
+  }, [looked, running]);
+
+  useEffect(() => {
+    if (looked && running) for (const m of metrics) observe(`graph:${node}.${m}`);
+  }, [looked, running, tick, metrics, node, observe]);
 
   if (metrics.length === 0) return <p className="empty">No graphs for this building.</p>;
   return (
@@ -55,10 +63,11 @@ function Graphs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: Obse
   );
 }
 
-function Logs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: ObserveOnce }) {
+function Logs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: Look }) {
   const snap = useGame((s) => s.snap);
   const seed = useGame((s) => s.run?.seed ?? 0);
-  useEffect(() => observe(`log:${node}`), [node, observe]);
+  const tick = snap?.tick ?? 0;
+  useEffect(() => observe(`log:${node}`), [node, observe, tick]);
   const lines = useMemo(() => (snap ? logLines(c, node, snap, seed) : []), [c, node, snap, seed]);
   if (lines.length === 0) return <p className="empty">Nothing in this building's log right now.</p>;
   return (
@@ -78,8 +87,9 @@ function Logs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: Observ
   );
 }
 
-function Changes({ node, observe }: { node: NodeId; observe: ObserveOnce }) {
-  useEffect(() => observe('changes'), [observe]);
+function Changes({ node, observe }: { node: NodeId; observe: Look }) {
+  const tick = useTick();
+  useEffect(() => observe('changes'), [observe, tick]);
   return <ChangeList only={node} empty="No changes to this building yet." />;
 }
 
@@ -141,13 +151,7 @@ export function BuildingPanel({ node, onClose }: { node: NodeId; onClose(): void
   const c = caseId ? cases[caseId] : undefined;
   const [tab, setTab] = useState<Tab>('Graphs');
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  // the panel is keyed by selection, so this is per opening; repeat looks would only bloat the replay inputs
-  const seen = useRef(new Set<string>());
-  const observeOnce = useCallback<ObserveOnce>((route) => {
-    if (seen.current.has(route)) return;
-    seen.current.add(route);
-    useGame.getState().observe(route);
-  }, []);
+  const observe = useGame((s) => s.observe);
   if (!c) return null;
   const info = c.layout[node];
   const name = info?.name ?? node;
@@ -204,9 +208,9 @@ export function BuildingPanel({ node, onClose }: { node: NodeId; onClose(): void
         ))}
       </div>
       <div className="dock-body" role="tabpanel" id={`${base}-body`} aria-labelledby={`${base}-tab-${tab}`} tabIndex={0}>
-        {tab === 'Graphs' && <Graphs c={c} node={node} observe={observeOnce} />}
-        {tab === 'Logs' && <Logs c={c} node={node} observe={observeOnce} />}
-        {tab === 'Changes' && <Changes node={node} observe={observeOnce} />}
+        {tab === 'Graphs' && <Graphs c={c} node={node} observe={observe} />}
+        {tab === 'Logs' && <Logs c={c} node={node} observe={observe} />}
+        {tab === 'Changes' && <Changes node={node} observe={observe} />}
         {tab === 'Actions' && <Actions c={c} node={node} />}
       </div>
     </aside>
