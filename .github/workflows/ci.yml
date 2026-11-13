@@ -1,7 +1,9 @@
 name: ci
 
 on:
+  # pushes to main, and pull requests: a branch with a pull request is checked once, not twice
   push:
+    branches: [main]
   pull_request:
 
 permissions:

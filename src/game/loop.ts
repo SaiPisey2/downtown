@@ -1,7 +1,7 @@
 import { cases } from '../cases';
 import type { Run, Snapshot } from '../sim';
 import { REPLAY_SPEED } from './flow';
-import { feedReplay, offerTick, useGame } from './store';
+import { feedReplay, offerTick, useGame, view } from './store';
 
 const HISTORY = 120;
 const MAX_REAL_MS = 250;
@@ -65,15 +65,7 @@ export function advance(realDtMs: number): void {
     acc -= 1;
   }
   if (run.snapshot.status !== 'running') acc = 0;
-  const log = [...run.log];
-  useGame.setState({
-    prev,
-    snap: run.snapshot,
-    history,
-    log,
-    found: log.flatMap((e) => (e.type === 'clue' ? [e.clueId] : [])),
-    alpha: Math.min(Math.max(acc, 0), 1),
-  });
+  useGame.setState({ prev, history, ...view(run), alpha: Math.min(Math.max(acc, 0), 1) });
 }
 
 function tickRate(caseId: string): number {

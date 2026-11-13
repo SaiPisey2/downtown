@@ -81,7 +81,7 @@ export interface GameState {
 type RunView = Pick<GameState, 'snap' | 'log' | 'found'>;
 
 /** What components read from a run: the current snapshot, the log, and the clues found. */
-function view(run: Run): RunView {
+export function view(run: Run): RunView {
   const log = [...run.log];
   const found = log.flatMap((e) => (e.type === 'clue' ? [e.clueId] : []));
   return { snap: run.snapshot, log, found };

@@ -19,7 +19,7 @@ then open the address it prints (http://127.0.0.1:5173).
 1. Inspect: click a building to see its graphs, logs and recent changes; the change log covers the whole city.
 2. Ask: each teammate has a few questions they can answer, and what they know changes as the incident unfolds.
 3. Act: actions sit on each building's Actions tab, say what they risk, and take time to land.
-4. Update the boss: she asks what to tell customers; honest updates help, spin costs you.
+4. Update the boss: she asks what to tell customers; honest updates count, spin earns nothing.
 5. Debrief: a score in five parts, a timeline of your run, what really happened, and a link that replays your run.
 
 ## The first case
@@ -36,7 +36,7 @@ Where the browser has no WebGL2, or when the address ends in `?flat=1`, the city
 
 ## How it is built
 
-- `src/sim/` is a pure, seeded simulation of requests flowing through services. It imports nothing from the browser, so the same inputs always give the same run; replays and share links rely on that.
+- `src/sim/` is a pure, deterministic simulation of requests flowing through services. It imports nothing from the browser, so the same inputs always give the same run; replays and share links rely on that.
 - `src/cases/` holds the case files in YAML, with a schema and checks that run when they load.
 - `src/scene/` draws the city with three.js through react-three-fiber. The scene is a function of the simulation state; it never decides anything itself.
 - `src/cast/` gives the characters their lines: scripted by default, or a live model when the player has set one up.
