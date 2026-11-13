@@ -4,6 +4,7 @@ import tutorialYaml from './tutorial.yaml?raw';
 import edgeRuleYaml from './edge-rule.yaml?raw';
 
 export { CaseError, parseCase } from './load';
+export { answerFor } from './answer';
 export type { CaseFile } from './schema';
 
 /** Parses every case file and indexes it by id; two files with one id is an error. */

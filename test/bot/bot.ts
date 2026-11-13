@@ -24,22 +24,39 @@ export function playScript(c: CaseFile, script: ScriptStep[], seed: number = c.s
   return { run, score: score(c, run.log, run.snapshot) };
 }
 
+export interface FuzzOptions {
+  /** sees the snapshot at every tick that is a multiple of 50 */
+  sample?: (s: Snapshot) => void;
+  /** a fix the player applies at a set tick, so the recovery and long runs get exercised */
+  fix?: { at: number; action: string };
+  /** play a copy of the case that cannot be won or lost on impact, so the run lasts to maxTicks */
+  endless?: boolean;
+}
+
 /**
  * A random player: `steps` inputs of every kind, with valid and invalid ids,
- * each after a random jump forward. `sample` sees the snapshot at every tick
- * that is a multiple of 50.
+ * each after a random jump forward. Deterministic for a given seed.
  */
-export function fuzz(c: CaseFile, seed: number, steps: number, sample?: (s: Snapshot) => void): Run {
+export function fuzz(c: CaseFile, seed: number, steps: number, opts: FuzzOptions = {}): Run {
+  const { sample, fix, endless } = opts;
   const rng = makeRng(seed);
-  const run = createRun(c, seed);
+  const model: CaseFile = endless
+    ? { ...c, win: { ...c.win, holdTicks: c.maxTicks + 1 }, lose: { maxFailedRequests: Number.MAX_VALUE } }
+    : c;
+  const run = createRun(model, seed);
   const pick = <T>(xs: readonly T[]): T => xs[rng.int(xs.length)]!;
   const actionIds = [...c.actions.map((a) => a.id), 'no_such_action', ''];
   const routes = [
     ...c.clues.map((x) => x.route), 'changes', 'graph:edge', 'graph:nowhere.queue', 'log:nowhere', 'ask:nobody:x', '',
   ];
   const updateIds = [...c.updates.map((u) => u.id), 'no_such_update'];
+  let fixed = fix === undefined;
   const advance = (ticks: number): void => {
     for (let i = 0; i < ticks && run.snapshot.status === 'running'; i++) {
+      if (!fixed && run.snapshot.tick >= fix!.at) {
+        run.act(fix!.action);
+        fixed = true;
+      }
       run.step();
       if (sample && run.snapshot.tick % 50 === 0) sample(run.snapshot);
     }

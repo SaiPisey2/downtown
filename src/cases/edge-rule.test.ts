@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createRun, type Snapshot } from '../sim';
 import { fuzz, playScript, type ScriptStep } from '../../test/bot/bot';
-import { cases, parseCase } from './index';
+import { answerFor, cases, parseCase } from './index';
 
 const text = readFileSync(new URL('./edge-rule.yaml', import.meta.url), 'utf8');
 const c = parseCase(text, 'edge-rule.yaml');
@@ -33,6 +33,10 @@ const at = (tick: number, actions: { at: number; id: string }[] = []): Snapshot 
 };
 
 describe('edge-rule case', () => {
+  it('the debrief states no publication date', () => {
+    expect(c.debrief.realTeam).not.toMatch(/2019|July/);
+  });
+
   it('loads and is exported by id with its source', () => {
     expect(c.id).toBe('edge-rule');
     expect(cases['edge-rule']?.title).toBe('The rule that ate the city');
@@ -137,6 +141,41 @@ describe('edge-rule case', () => {
     expect(run.observe('graph:orders.errorRate').map((x) => x.id)).toEqual(['orders_fine']);
   });
 
+  const BOT_A: ScriptStep[] = byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'filter_off' }, ...honestUpdates(700)]);
+  const recovery: [string, ScriptStep[]][] = [
+    ['restart_edge', [{ at: 300, do: 'act', arg: 'restart_edge' }]],
+    ['block_sources', [{ at: 300, do: 'act', arg: 'block_sources' }, { at: 500, do: 'act', arg: 'unblock_sources' }]],
+    ['rollback_orders', [{ at: 300, do: 'act', arg: 'rollback_orders' }]],
+    ['restart_edge then rollback_orders', [{ at: 300, do: 'act', arg: 'restart_edge' }, { at: 360, do: 'act', arg: 'rollback_orders' }]],
+  ];
+  it.each(recovery)('a mistake (%s) followed by the right fix is still won, with a lower score than Bot A', (_name, mistakes) => {
+    const a = playScript(c, BOT_A);
+    const m = playScript(c, byTick([...BOT_A, ...mistakes]));
+    expect(m.run.snapshot.status).toBe('won');
+    expect(m.run.snapshot.tick).toBeLessThan(c.maxTicks);
+    expect(m.score.total).toBeLessThan(a.score.total);
+  });
+
+  const asks = c.cast.flatMap((m) => m.questions.map((q) => ({ m, q, route: `ask:${m.id}:${q.id}` })));
+  it('before the fault, no question reveals a clue and the "before" answers are shown', () => {
+    const run = createRun(c);
+    run.step(100);
+    for (const { m, q, route } of asks) {
+      expect(run.observe(route), route).toEqual([]);
+      expect(answerFor(c, m.id, q.id, run.snapshot), route).toBe(q.answerBefore ?? q.answer);
+    }
+    expect(asks.filter((x) => x.q.answerBefore !== undefined).length).toBe(asks.length);
+  });
+
+  it('during the fault, every question gives its normal answer and reveals its clue', () => {
+    const run = createRun(c);
+    run.step(500);
+    for (const { m, q, route } of asks) {
+      expect(answerFor(c, m.id, q.id, run.snapshot), route).toBe(q.answer);
+      expect(run.observe(route).map((x) => x.id), route).toEqual([q.reveals]);
+    }
+  });
+
   it('keeps the cast honest: teammates have 3-4 questions, the stakeholder none, every answer that tells a fact reveals a clue', () => {
     for (const m of c.cast) {
       if (m.role === 'stakeholder') expect(m.questions).toHaveLength(0);
@@ -164,12 +203,61 @@ describe('edge-rule case', () => {
     };
     for (let seed = 1; seed <= 50; seed++) {
       let sampled = 0;
-      expect(() => fuzz(c, seed, 400, (s) => {
-        sampled++;
-        walk(s, `seed ${seed} tick ${s.tick}`);
+      expect(() => fuzz(c, seed, 400, {
+        sample: (s) => {
+          sampled++;
+          walk(s, `seed ${seed} tick ${s.tick}`);
+        },
       })).not.toThrow();
       expect(sampled).toBeGreaterThan(0);
     }
     expect(bad).toEqual([]);
+  });
+
+  it('fuzz after the fix: the recovery path and post-fix mistakes stay finite and non-negative', () => {
+    const bad: string[] = [];
+    const walk = (v: unknown, path: string): void => {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v) || v < 0) bad.push(`${path}=${v}`);
+      } else if (v && typeof v === 'object') {
+        for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`);
+      }
+    };
+    let toTheEnd = 0;
+    let harmAfterFix = 0;
+    const harmfulIds = new Set(harmful);
+    for (let seed = 1; seed <= 50; seed++) {
+      let sampled = 0;
+      const run = fuzz(c, seed, 400, {
+        fix: { at: 250, action: 'filter_off' },
+        endless: true,
+        sample: (s) => {
+          sampled++;
+          walk(s, `seed ${seed} tick ${s.tick}`);
+        },
+      });
+      const fixedAt = run.log.find((e) => e.type === 'action_landed' && e.actionId === 'filter_off')?.tick;
+      expect(fixedAt).toBeDefined();
+      harmAfterFix += run.log.filter((e) => e.type === 'action_landed' && harmfulIds.has(e.actionId) && e.tick > fixedAt!).length;
+      expect(sampled).toBeGreaterThan(0);
+      if (run.snapshot.tick === c.maxTicks) toTheEnd++;
+    }
+    expect(bad).toEqual([]);
+    expect(toTheEnd).toBeGreaterThanOrEqual(40);
+    expect(harmAfterFix).toBeGreaterThan(50);
+  });
+
+  it('fuzz is deterministic', () => {
+    const one = fuzz(c, 7, 400);
+    const two = fuzz(c, 7, 400);
+    expect(two.log).toEqual(one.log);
+    expect(two.inputs).toEqual(one.inputs);
+    expect(two.snapshot).toEqual(one.snapshot);
+    const opts = { fix: { at: 250, action: 'filter_off' }, endless: true };
+    const fixed = fuzz(c, 7, 400, opts);
+    const again = fuzz(c, 7, 400, opts);
+    expect(again.log).toEqual(fixed.log);
+    expect(again.inputs).toEqual(fixed.inputs);
+    expect(again.snapshot).toEqual(fixed.snapshot);
   });
 });

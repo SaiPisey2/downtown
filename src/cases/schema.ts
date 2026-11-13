@@ -23,7 +23,14 @@ export interface CaseFile extends CaseModel {
     role: 'teammate' | 'stakeholder';
     persona: string;
     knows: string[];
-    questions: { id: string; label: string; answer: string; reveals?: string }[];
+    questions: {
+      id: string;
+      label: string;
+      answer: string;
+      reveals?: string;
+      /** shown instead of `answer` while the revealed clue's `when` does not hold */
+      answerBefore?: string;
+    }[];
   }[];
   /** scripted lines by key (timeline messages, consequences) */
   lines: Record<string, string>;
@@ -168,7 +175,9 @@ export const caseSchema = o({
       role: z.enum(['teammate', 'stakeholder']),
       persona: str,
       knows: z.array(str),
-      questions: z.array(o({ id: z.string().min(1), label: str, answer: str, reveals: str.optional() })),
+      questions: z.array(
+        o({ id: z.string().min(1), label: str, answer: str, reveals: str.optional(), answerBefore: str.optional() }),
+      ),
     }),
   ),
   lines: z.record(str, str),

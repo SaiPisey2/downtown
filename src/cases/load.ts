@@ -145,6 +145,9 @@ function check(c: CaseFile): string[] {
       if (q.reveals !== undefined && !clueIds.includes(q.reveals)) {
         issues.push(`cast "${m.id}" question "${q.id}" reveals unknown clue "${q.reveals}"`);
       }
+      if (q.answerBefore !== undefined && !c.clues.some((x) => x.id === q.reveals && x.when !== undefined)) {
+        issues.push(`cast "${m.id}" question "${q.id}": answerBefore is never shown (it needs a revealed clue with a "when")`);
+      }
     }
   }
 

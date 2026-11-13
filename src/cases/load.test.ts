@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { createRun } from '../sim';
-import { CaseError, buildCases, cases, parseCase } from './index';
+import { CaseError, answerFor, buildCases, cases, parseCase } from './index';
 
 const text = readFileSync(new URL('./tutorial.yaml', import.meta.url), 'utf8');
 const PATH = 'tutorial.yaml';
@@ -202,5 +202,34 @@ describe('review follow-ups', () => {
 describe('case registry', () => {
   it('throws on two case files with the same id', () => {
     expect(() => buildCases({ 'a.yaml': text, 'b.yaml': text })).toThrow(/duplicate case id "tutorial".*a\.yaml.*b\.yaml/);
+  });
+});
+
+describe('answers that depend on time', () => {
+  const withBefore = (d: Doc) => {
+    d.cast[0].questions[0].reveals = 'new_build';
+    d.cast[0].questions[0].answerBefore = 'Nothing has shipped yet.';
+  };
+  it('accepts answerBefore on a question whose clue has a when', () => {
+    const c = parseCase(mutate(withBefore), PATH);
+    expect(c.cast[0]!.questions[0]!.answerBefore).toBe('Nothing has shipped yet.');
+  });
+  it('rejects answerBefore that could never be shown', () => {
+    expectFail((d) => (d.cast[0].questions[1].answerBefore = 'x'), 'question "ledger"', 'answerBefore');
+    expectFail((d) => {
+      withBefore(d);
+      delete d.clues[0].when;
+    }, 'question "changed"', 'answerBefore');
+  });
+  it('answerFor picks the before text until the revealed clue is eligible', () => {
+    const c = parseCase(mutate(withBefore), PATH);
+    const run = createRun(c);
+    run.step(10);
+    expect(answerFor(c, 'priya', 'changed', run.snapshot)).toBe('Nothing has shipped yet.');
+    expect(answerFor(c, 'priya', 'ledger', run.snapshot)).toBe(c.cast[0]!.questions[1]!.answer);
+    run.step(15);
+    expect(answerFor(c, 'priya', 'changed', run.snapshot)).toBe(c.cast[0]!.questions[0]!.answer);
+    expect(() => answerFor(c, 'priya', 'nope', run.snapshot)).toThrow(/nope/);
+    expect(() => answerFor(c, 'ghost', 'changed', run.snapshot)).toThrow(/ghost/);
   });
 });

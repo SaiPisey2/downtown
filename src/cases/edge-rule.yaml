@@ -25,7 +25,7 @@ nodes:
   api:      { instances: 4,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 10 }
   cache:    { instances: 4,  rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 2 }
   accounts: { instances: 3,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 2000, baseLatencyMs: 5 }
-  orders:   { instances: 2,  rpsPerInstance: 250,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 1000, baseLatencyMs: 5 }
+  orders:   { instances: 2,  rpsPerInstance: 286,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 1000, baseLatencyMs: 5 }
   db:       { instances: 3,  rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 5 }
 
 edges:
@@ -169,6 +169,7 @@ clues:
     text: Rules update 412 went out to the filter two ticks before the edge ran out of CPU. It reached every edge machine in one step.
   - id: volume_normal
     route: ask:netops:volume
+    when: { metric: city.tick, op: ">=", value: 242 }
     weight: 6
     text: Traffic volume is normal and comes from the usual places. This does not look like an attack.
   - id: orders_fine
@@ -178,23 +179,27 @@ clues:
     text: The orders service is not failing. It sees fewer requests than usual, not more.
   - id: edge_cpu_report
     route: ask:netops:cpu
+    when: { metric: edge.saturation, op: ">", value: 0.95 }
     weight: 5
     text: The edge machines are spending their CPU on request checks, not on moving traffic.
   - id: no_network_change
     route: ask:netops:network
+    when: { metric: city.tick, op: ">=", value: 242 }
     weight: 2
     text: Nobody changed the network today.
   - id: rules_today
     route: ask:devlead:shipped
-    when: { metric: city.tick, op: ">=", value: 240 }
+    when: { metric: city.tick, op: ">=", value: 242 }
     weight: 7
     text: A rules update for the filter went out today. Rules updates reach every edge machine at the same time.
   - id: orders_change_small
     route: ask:devlead:orders
+    when: { metric: city.tick, op: ">=", value: 420 }
     weight: 2
     text: The orders deploy only changed some wording, and it went out after the trouble began.
   - id: db_quiet
     route: ask:devlead:db
+    when: { metric: edge.saturation, op: ">", value: 0.95 }
     weight: 2
     text: The database is quieter than usual.
 
@@ -264,14 +269,17 @@ cast:
       - id: volume
         label: Is this an attack? How is the traffic?
         answer: Volume is normal. Same sources as yesterday. No sign of an attack.
+        answerBefore: All quiet. Nothing to look at.
         reveals: volume_normal
       - id: cpu
         label: What are the edge machines doing?
         answer: CPU is pinned. It is all going into request checks, not into moving traffic.
+        answerBefore: Edge CPU looks normal from here.
         reveals: edge_cpu_report
       - id: network
         label: Did anything change on the network?
         answer: No network changes today. I checked.
+        answerBefore: Nothing is broken, so I have not looked.
         reveals: no_network_change
   - id: devlead
     name: Tomas
@@ -282,14 +290,17 @@ cast:
       - id: shipped
         label: Did anything ship today?
         answer: The filter team pushed a rules update this afternoon. Those go to every edge machine at the same moment.
+        answerBefore: Nothing has shipped yet today.
         reveals: rules_today
       - id: orders
         label: What was in the orders deploy?
-        answer: Wording fixes on the order page. It went out after things were already broken.
+        answer: Wording fixes on the order page. It went out after things had already broken.
+        answerBefore: No orders deploy has gone out today.
         reveals: orders_change_small
       - id: db
         label: Is the database in trouble?
         answer: No, it is quieter than normal. Fewer requests are getting that far.
+        answerBefore: Not that I can see. It looks normal.
         reveals: db_quiet
   - id: boss
     name: Ruth
@@ -311,16 +322,14 @@ lines:
 
 debrief:
   happened: >-
-    A new rule for the request filter was pushed to every edge machine in one
-    step. One expression in it took a very long time to check each request, so
-    the edge machines spent all their CPU on checking and could not move
-    traffic. Most visitors got errors for about half an hour.
+    A new rule for the request filter was deployed to every edge machine in one
+    step. One expression in the rule backtracked heavily, and checking it used
+    up all the CPU on the machines that serve web traffic. Most traffic failed
+    for about half an hour.
   realTeam: >-
-    The real team first suspected an attack, because the symptoms looked like
-    one. Once they saw the timing of the rules deploy, they switched the
-    filtering feature off everywhere, which brought traffic back. They
-    restored the filter after the bad rule was removed. Cloudflare published
-    the full write-up on 2 July 2019.
+    The real team first suspected an attack. They recovered by switching the
+    filtering feature off everywhere at once, then turned it back on after
+    removing the bad rule. Cloudflare published a detailed write-up afterwards.
   fictionNote: >-
     The city, its buildings, the people and every number in this case are made
     up for play. Only the shape of the story follows the real incident.
