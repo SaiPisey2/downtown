@@ -90,8 +90,12 @@ function check(c: CaseFile): string[] {
       if (ev.from === undefined || !castIds.includes(ev.from)) issues.push(`${w}: "from" must be a cast id, got "${ev.from ?? ''}"`);
       if (ev.lineKey === undefined) issues.push(`${w}: message needs a lineKey`);
       lineKey(ev.lineKey, w);
+      for (const k of ['target', 'modifier', 'label'] as const) {
+        if (ev[k] !== undefined) issues.push(`${w}: a message has no "${k}"`);
+      }
       return;
     }
+    if (ev.when !== undefined) issues.push(`${w}: only a message has a "when"`);
     if (ev.target === undefined) issues.push(`${w}: needs a target`);
     else needNode(ev.target, w);
     if (ev.kind === 'modify' && !ev.modifier) issues.push(`${w}: modify needs a modifier`);
@@ -120,6 +124,7 @@ function check(c: CaseFile): string[] {
   for (const x of c.clues) if (x.when) conds.push({ where: `clue "${x.id}" when`, cond: x.when });
   c.timeline.forEach((ev, i) => {
     if (ev.modifier?.while) conds.push({ where: `timeline[${i}] while`, cond: ev.modifier.while });
+    if (ev.when) conds.push({ where: `timeline[${i}] when`, cond: ev.when });
   });
   for (const a of c.actions) {
     a.effects.forEach((m) => m.while && conds.push({ where: `action "${a.id}" effect while`, cond: m.while }));

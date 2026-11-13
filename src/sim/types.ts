@@ -60,6 +60,8 @@ export interface TimelineEvent {
   label?: string;
   from?: string;
   lineKey?: string;
+  /** messages only: said only if this holds at its tick, otherwise skipped and not logged */
+  when?: Cond;
 }
 
 export interface ActionDef {

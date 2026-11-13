@@ -291,7 +291,7 @@ describe('edge-rule case', () => {
     expect(bad).toEqual([]);
     expect(toTheEnd).toBeGreaterThanOrEqual(40);
     expect(harmAfterFix).toBeGreaterThan(50);
-  });
+  }, 30_000); // 50 runs to the end of the clock: slow when the whole suite runs at once
 
   it('fuzz is deterministic', () => {
     const one = fuzz(c, 7, 400);

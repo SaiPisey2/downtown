@@ -93,6 +93,8 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
       if (ev.at !== t) continue;
       const target = ev.target ?? ev.modifier?.target;
       if (ev.kind === 'message') {
+        // judged on the city as the player last saw it
+        if (ev.when && !evalCond(ev.when, prev)) continue;
         emit(t, { type: 'message', from: ev.from ?? '', lineKey: ev.lineKey ?? '' });
         continue;
       }

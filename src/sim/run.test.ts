@@ -157,6 +157,22 @@ describe('run', () => {
     expect(r.snapshot.pending).toHaveLength(1);
   });
 
+  it('skips a message whose when is false at its tick, and logs one whose when holds', () => {
+    const m = model({
+      timeline: [
+        ...model().timeline,
+        { at: 5, kind: 'message', from: 'boss', lineKey: 'early', when: { metric: 'city.errorRate', op: '>', value: 0.05 } },
+        { at: 30, kind: 'message', from: 'boss', lineKey: 'late', when: { metric: 'city.errorRate', op: '>', value: 0.05 } },
+        { at: 31, kind: 'message', from: 'boss', lineKey: 'always' },
+      ],
+    });
+    const r = createRun(m);
+    r.step(40);
+    expect(r.log.filter((e) => e.type === 'message').map((e) => [e.tick, (e as { lineKey: string }).lineKey])).toEqual([
+      [30, 'late'], [31, 'always'],
+    ]);
+  });
+
   it('expires forTicks modifiers', () => {
     const m = model({
       timeline: [{ at: 5, kind: 'modify', target: 'edge', modifier: { target: 'edge', set: { enabled: false }, forTicks: 3 } }],

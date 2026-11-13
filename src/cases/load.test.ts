@@ -176,6 +176,16 @@ describe('timeline and numbers', () => {
     expectFail((d) => delete d.timeline[2].from, 'timeline[2]', 'from');
     expectFail((d) => (d.timeline[2].from = 'stranger'), 'stranger');
     expectFail((d) => delete d.timeline[2].lineKey, 'timeline[2]', 'lineKey');
+    // a message carries no target or modifier, and only a message has a when
+    expectFail((d) => (d.timeline[2].target = 'shop'), 'timeline[2]', 'target');
+    expectFail((d) => (d.timeline[2].modifier = { ...d.timeline[1].modifier }), 'timeline[2]', 'modifier');
+    expectFail((d) => (d.timeline[0].when = { metric: 'shop.queue', op: '>', value: 1 }), 'timeline[0]', 'when');
+  });
+  it('checks the nodes named in a message when, and accepts a good one', () => {
+    expectFail((d) => (d.timeline[2].when = { metric: 'moat.errorRate', op: '>', value: 0 }), 'timeline[2] when', 'moat');
+    expectFail((d) => (d.timeline[2].when = { metric: 'shop.nope', op: '>', value: 0 }), 'timeline[2] when', 'nope');
+    const ok = mutate((d) => (d.timeline[2].when = { metric: 'city.errorRate', op: '>', value: 0.05 }));
+    expect(parseCase(ok, PATH).timeline[2]!.when).toEqual({ metric: 'city.errorRate', op: '>', value: 0.05 });
   });
   it('rejects non-positive and non-finite values', () => {
     expectFail((d) => (d.win.holdTicks = 0), 'win.holdTicks');

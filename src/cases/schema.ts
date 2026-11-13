@@ -127,6 +127,7 @@ export const caseSchema = o({
       label: str.optional(),
       from: str.optional(),
       lineKey: str.optional(),
+      when: cond.optional(),
     }),
   ),
   actions: z.array(
