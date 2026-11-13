@@ -4,7 +4,10 @@ let cached: boolean | null = null;
 export function hasWebGL2(): boolean {
   if (cached !== null) return cached;
   try {
-    cached = document.createElement('canvas').getContext('webgl2') !== null;
+    const gl = document.createElement('canvas').getContext('webgl2');
+    cached = gl !== null;
+    // browsers cap live contexts; hand this probe's back now rather than at garbage collection
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
   } catch {
     cached = false;
   }

@@ -14,6 +14,10 @@ export interface GameState {
   paused: boolean;
   pauseReason: 'user' | 'hidden' | null;
   selected: NodeId | null;
+  /** bumped by every select(), so selecting the selected building again still re-centres the camera */
+  selectSeq: number;
+  /** calmer board: no smoke or pulsing, slower dots (the OS setting applies as well) */
+  reducedMotion: boolean;
   /** last 120 values per `${node}.${metric}`, one per simulated tick */
   history: Record<string, number[]>;
   log: readonly GameEvent[];
@@ -28,6 +32,7 @@ export interface GameState {
   hint(): void;
   setPaused(p: boolean, reason?: 'user' | 'hidden'): void;
   select(id: NodeId | null): void;
+  setReducedMotion(on: boolean): void;
   finish(): void;
 }
 
@@ -50,6 +55,8 @@ export const useGame = create<GameState>()((set, get) => ({
   paused: false,
   pauseReason: null,
   selected: null,
+  selectSeq: 0,
+  reducedMotion: false,
   history: {},
   log: [],
   found: [],
@@ -103,7 +110,10 @@ export const useGame = create<GameState>()((set, get) => ({
     set(p ? { paused: true, pauseReason: reason } : { paused: false, pauseReason: null });
   },
   select(id) {
-    set({ selected: id });
+    set((s) => ({ selected: id, selectSeq: s.selectSeq + 1 }));
+  },
+  setReducedMotion(on) {
+    set({ reducedMotion: on });
   },
   finish() {
     set({ screen: 'debrief' });

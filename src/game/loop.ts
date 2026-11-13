@@ -15,6 +15,11 @@ export function setSpeed(n: number): void {
   speed = n;
 }
 
+/** Simulated ticks per real tick, for animations that keep pace with the simulation. */
+export function getSpeed(): number {
+  return speed;
+}
+
 function pushHistory(history: Record<string, number[]>, snap: Snapshot): void {
   for (const [node, view] of Object.entries(snap.nodes)) {
     for (const [metric, v] of Object.entries(view)) {

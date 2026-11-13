@@ -4,11 +4,13 @@ import {
   CAMERA,
   boardBounds,
   buildingHeight,
+  clampTarget,
   homeView,
   padOutline,
   padRadius,
   stepOrbit,
   tint,
+  tintInto,
   worldPos,
 } from './mapping';
 
@@ -33,6 +35,30 @@ describe('tint', () => {
   it('treats NaN and negatives as calm', () => {
     expect(tint(Number.NaN)).toEqual(tint(0));
     expect(tint(-1)).toEqual(tint(0));
+  });
+});
+
+describe('tintInto', () => {
+  it('writes the same colour tint returns into the given array', () => {
+    const out: [number, number, number] = [9, 9, 9];
+    for (const e of [0, 0.1, 0.25, 0.5, 2, Number.NaN]) {
+      expect(tintInto(out, e)).toBe(out);
+      expect(out).toEqual(tint(e));
+    }
+  });
+});
+
+describe('clampTarget', () => {
+  const b = { minX: -3, maxX: 12, minZ: -2, maxZ: 9 };
+  it('leaves a target over the board where it is', () => {
+    expect(clampTarget(b, [4, 1, 5])).toEqual([4, 1, 5]);
+  });
+  it('brings a stray target back to the nearest point over the board', () => {
+    expect(clampTarget(b, [20, 1, -10])).toEqual([12, 1, -2]);
+    expect(clampTarget(b, [-9, -2, 30])).toEqual([-3, 0, 9]);
+  });
+  it('keeps the target between the ground and a few units above it', () => {
+    expect(clampTarget(b, [0, 10, 0])).toEqual([0, 4, 0]);
   });
 });
 

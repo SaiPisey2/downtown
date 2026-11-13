@@ -5,7 +5,7 @@ import { Spherical, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { CaseFile } from '../cases';
 import { useGame } from '../game/store';
-import { CAMERA, boardBounds, homeView, stepOrbit, worldPos } from './mapping';
+import { CAMERA, boardBounds, clampTarget, homeView, stepOrbit, worldPos } from './mapping';
 
 /** Per-second rate of the exponential ease toward a goal. */
 const EASE = 6;
@@ -82,7 +82,8 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
   useEffect(
     () =>
       useGame.subscribe((s, prev) => {
-        if (s.selected === prev.selected || !s.selected) return;
+        // every select() counts, so picking the selected building again re-centres on it
+        if (s.selectSeq === prev.selectSeq || !s.selected) return;
         const n = layout[s.selected];
         if (n) goal.current = { target: new Vector3(...worldPos(n.pos)) };
       }),
@@ -182,16 +183,12 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
     }
     // keep the point we orbit around over the board
     const t = ctl.target;
-    const cx = Math.min(Math.max(t.x, bounds.minX), bounds.maxX) - t.x;
-    const cz = Math.min(Math.max(t.z, bounds.minZ), bounds.maxZ) - t.z;
-    const cy = Math.min(Math.max(t.y, 0), 4) - t.y;
-    if (cx || cy || cz) {
-      t.x += cx;
-      t.y += cy;
-      t.z += cz;
-      camera.position.x += cx;
-      camera.position.y += cy;
-      camera.position.z += cz;
+    const [x, y, z] = clampTarget(bounds, [t.x, t.y, t.z]);
+    if (x !== t.x || y !== t.y || z !== t.z) {
+      camera.position.x += x - t.x;
+      camera.position.y += y - t.y;
+      camera.position.z += z - t.z;
+      t.set(x, y, z);
     }
   });
 

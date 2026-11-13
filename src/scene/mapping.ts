@@ -26,8 +26,14 @@ const ALARM: Vec3 = [0.75, 0.04, 0.03];
 
 /** Linear RGB: calm teal at 0, red at an error rate of 0.5 or more. */
 export function tint(errorRate: number): Vec3 {
+  return tintInto([0, 0, 0], errorRate);
+}
+
+/** `tint`, written into `out` (for per-frame use without allocating). */
+export function tintInto(out: Vec3, errorRate: number): Vec3 {
   const t = Number.isFinite(errorRate) ? Math.min(Math.max(errorRate / 0.5, 0), 1) : 0;
-  return [0, 1, 2].map((i) => CALM[i]! + (ALARM[i]! - CALM[i]!) * t) as Vec3;
+  for (let i = 0; i < 3; i++) out[i] = CALM[i]! + (ALARM[i]! - CALM[i]!) * t;
+  return out;
 }
 
 const BASE_HEIGHT: Record<string, number> = {
@@ -71,6 +77,15 @@ export function boardBounds(layout: Layout): Bounds {
     minZ: Math.min(...pts.map((p) => p[2])) - BOARD_MARGIN,
     maxZ: Math.max(...pts.map((p) => p[2])) + BOARD_MARGIN,
   };
+}
+
+/** Highest the camera's orbit point may rise above the ground. */
+const TARGET_CEILING = 4;
+
+/** The nearest point to `target` that keeps the camera's orbit point over the board. */
+export function clampTarget(b: Bounds, target: Vec3): Vec3 {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+  return [clamp(target[0], b.minX, b.maxX), clamp(target[1], 0, TARGET_CEILING), clamp(target[2], b.minZ, b.maxZ)];
 }
 
 /** Looks at the centroid from the south, far enough back to frame the whole slab. */

@@ -4,9 +4,11 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactNode, RefObject } from 'react';
 import {
+  BoxGeometry,
   BufferGeometry,
   Color,
   CylinderGeometry,
+  Group,
   InstancedMesh,
   Material,
   Mesh,
@@ -30,13 +32,15 @@ const PLINTH = 0.22;
 const slate = new MeshStandardMaterial({ color: '#c3ccd8', roughness: 0.78, metalness: 0.05 });
 const slateDark = new MeshStandardMaterial({ color: '#8d99ab', roughness: 0.85 });
 const plinthMat = new MeshStandardMaterial({ color: '#3b4960', roughness: 0.9 });
-const windowMat = new MeshBasicMaterial({ color: '#ffffff', toneMapped: false });
 const ringMat = new MeshBasicMaterial({ color: '#5eead4', toneMapped: false, transparent: true, opacity: 0.9 });
 const windowGeo = new PlaneGeometry(0.15, 0.19);
 const ringGeo = new RingGeometry(1.6, 1.76, 64).rotateX(-Math.PI / 2);
 const LIT = new Color('#ffc46b');
 const LIT_PALE = new Color('#ffe0a3');
 const DARK = new Color('#26314a');
+const craneMat = new MeshStandardMaterial({ color: '#ffd84a', emissive: '#b88a10', emissiveIntensity: 0.55, roughness: 0.6 });
+const beaconMat = new MeshBasicMaterial({ color: '#fff4c2', toneMapped: false });
+const unitBox = new BoxGeometry(1, 1, 1);
 
 const boxCache = new Map<string, BufferGeometry>();
 function roundedBox(w: number, h: number, d: number, r = 0.1): BufferGeometry {
@@ -122,7 +126,7 @@ function hash(s: string, i: number): number {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-function Windows({ spots, seed }: { spots: WindowSpot[]; seed: string }) {
+function Windows({ spots, seed, material }: { spots: WindowSpot[]; seed: string; material: Material }) {
   const ref = useRef<InstancedMesh>(null);
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -140,7 +144,7 @@ function Windows({ spots, seed }: { spots: WindowSpot[]; seed: string }) {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [spots, seed]);
   if (spots.length === 0) return null;
-  return <instancedMesh ref={ref} args={[windowGeo, windowMat, spots.length]} />;
+  return <instancedMesh ref={ref} args={[windowGeo, material, spots.length]} />;
 }
 
 interface Shape { body: ReactNode; windows: WindowSpot[]; top: number }
@@ -333,6 +337,47 @@ function SelectionRing({ id }: { id: string }) {
   return <mesh ref={mesh} geometry={ringGeo} material={ringMat} position={[0, 0.1, 0]} />;
 }
 
+/** A thin box from (x0, y0, z0) to (x1, y1, z1). */
+function Beam({ from, to, material = craneMat }: { from: Vec3; to: Vec3; material?: Material }) {
+  const size: Vec3 = [Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1]), Math.abs(to[2] - from[2])];
+  const mid: Vec3 = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2];
+  return <mesh geometry={unitBox} material={material} position={mid} scale={size} castShadow />;
+}
+
+/**
+ * A small tower crane at the back-right corner of the plinth, its jib swung
+ * out to the side so it never sits under the name label: the building had a
+ * change lately. Hidden until the board shows it; the beacon (the last child) blinks.
+ */
+function Crane({ top, ref }: { top: number; ref: RefObject<Group | null> }) {
+  const h = top + 0.2;
+  const x = 1.0;
+  const z = -0.85;
+  const t = 0.075;
+  return (
+    <group ref={ref} visible={false}>
+      <Beam from={[x - t, PLINTH, z - t]} to={[x + t, h, z + t]} />
+      <Beam from={[x - 0.5, h, z - t / 2]} to={[x + 1.5, h + 0.1, z + t / 2]} />
+      <Beam from={[x - 0.55, h - 0.2, z - 0.1]} to={[x - 0.28, h, z + 0.1]} material={slateDark} />
+      <Beam from={[x - 0.13, h - 0.24, z - 0.12]} to={[x + 0.13, h, z + 0.12]} />
+      <Beam from={[x + 1.25, h - 0.9, z - 0.008]} to={[x + 1.266, h, z + 0.008]} material={slateDark} />
+      <Beam from={[x + 1.18, h - 1.04, z - 0.07]} to={[x + 1.34, h - 0.9, z + 0.07]} />
+      <mesh geometry={unitBox} material={beaconMat} position={[x, h + 0.2, z]} scale={0.1} />
+    </group>
+  );
+}
+
+/** The parts of a building the board animates from outside React. */
+export interface BuildingParts {
+  /** tintable accent, coloured by error rate and glowing when saturated */
+  accent: MeshStandardMaterial;
+  /** this building's window material; its colour scales every window's brightness */
+  windows: MeshBasicMaterial;
+  crane: Group;
+  /** height of the roof, where smoke comes from */
+  top: number;
+}
+
 export interface BuildingProps {
   id: string;
   kind: Kind;
@@ -343,10 +388,14 @@ export interface BuildingProps {
   labels: RefObject<HTMLDivElement | null>;
   /** Receives the building's tintable accent material (null on unmount). */
   onAccent?: (nodeId: string, material: MeshStandardMaterial | null) => void;
+  /** Receives the parts the board animates (null on unmount). */
+  onParts?: (nodeId: string, parts: BuildingParts | null) => void;
+  /** True when the pointer press that ends in this click travelled far enough to be a drag. */
+  wasDrag?: () => boolean;
 }
 
-/** One service: plinth, kind silhouette, lit windows, name label and selection ring. */
-export function Building({ id, kind, name, height, position, labels, onAccent }: BuildingProps) {
+/** One service: plinth, kind silhouette, lit windows, name label, selection ring and crane. */
+export function Building({ id, kind, name, height, position, labels, onAccent, onParts, wasDrag }: BuildingProps) {
   const select = useGame((s) => s.select);
   const accent = useMemo(() => {
     const c = new Color().setRGB(...tint(0));
@@ -356,12 +405,27 @@ export function Building({ id, kind, name, height, position, labels, onAccent }:
     onAccent?.(id, accent);
     return () => onAccent?.(id, null);
   }, [id, accent, onAccent]);
-  useEffect(() => () => accent.dispose(), [accent]);
+  const windows = useMemo(() => new MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), []);
+  useEffect(
+    () => () => {
+      accent.dispose();
+      windows.dispose();
+    },
+    [accent, windows],
+  );
 
   const shape = useMemo(() => silhouette(kind, height, PLINTH, accent), [kind, height, accent]);
+  const crane = useRef<Group>(null);
+  useEffect(() => {
+    if (!crane.current) return;
+    onParts?.(id, { accent, windows, crane: crane.current, top: shape.top });
+    return () => onParts?.(id, null);
+  }, [id, accent, windows, shape.top, onParts]);
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    // the end of a camera drag is not a choice of building
+    if (wasDrag?.()) return;
     select(id);
   };
   return (
@@ -379,8 +443,9 @@ export function Building({ id, kind, name, height, position, labels, onAccent }:
         <Part geometry={roundedBox(2.3, PLINTH, 2.3, 0.1)} material={plinthMat} position={[0, PLINTH / 2, 0]} />
         {shape.body}
       </group>
-      <Windows spots={shape.windows} seed={id} />
+      <Windows spots={shape.windows} seed={id} material={windows} />
       <SelectionRing id={id} />
+      <Crane top={shape.top} ref={crane} />
       <Label id={id} name={name} y={shape.top + 0.75} portal={labels} />
     </group>
   );

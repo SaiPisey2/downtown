@@ -1,5 +1,5 @@
 import { Canvas, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 import {
   CanvasTexture,
@@ -8,13 +8,17 @@ import {
   Object3D,
   Shape,
   SRGBColorSpace,
+  Vector3,
 } from 'three';
 import { cases } from '../cases';
 import type { CaseFile } from '../cases';
 import { useGame } from '../game/store';
 import { setSceneProbe } from '../game/testHook';
 import { Building } from './Building';
+import type { BuildingParts } from './Building';
 import { CameraRig } from './CameraRig';
+import { Effects } from './Effects';
+import { fps, live, resetLive } from './live';
 import {
   CAMERA,
   DISTRICTS,
@@ -28,6 +32,8 @@ import {
 } from './mapping';
 import type { District, Vec3 } from './mapping';
 import { Roads } from './Roads';
+// explicit extension: on a case-insensitive disk './Traffic' would resolve to the pure './traffic.ts'
+import { Traffic } from './Traffic.tsx';
 import { hasWebGL2 } from './webgl';
 
 const BACKGROUND = 'radial-gradient(ellipse 120% 90% at 50% 30%, #1a2950 0%, #0d1630 55%, #060a18 100%)';
@@ -145,8 +151,8 @@ function Pad({ district, points, radius }: { district: District; points: [number
   );
 }
 
-/** Lets the e2e test read the camera and sample the canvas; mounted only when the test hook is on. */
-function Probe() {
+/** Lets the e2e test read the camera, the scene's stats and sample the canvas; mounted only when the test hook is on. */
+function Probe({ layout }: { layout: CaseFile['layout'] }) {
   const get = useThree((s) => s.get);
   useEffect(() => {
     setSceneProbe({
@@ -180,13 +186,45 @@ function Probe() {
         }
         return seen.size;
       },
+      sceneStats() {
+        const nodes: ReturnType<SceneStatsFn>['nodes'] = {};
+        for (const [id, n] of Object.entries(live.nodes)) nodes[id] = { ...n, tint: [...n.tint] as Vec3 };
+        const { dots, okDots, retryDots, failedDots, smoke } = live;
+        return { dots, okDots, retryDots, failedDots, smoke, nodes };
+      },
+      fps,
+      nodeScreen(id) {
+        const { camera, gl } = get();
+        const n = layout[id];
+        if (!n) throw new Error(`no building "${id}"`);
+        const p = new Vector3(...worldPos(n.pos)).setY(0.8).project(camera);
+        const r = gl.domElement.getBoundingClientRect();
+        return [r.left + ((p.x + 1) / 2) * r.width, r.top + ((1 - p.y) / 2) * r.height];
+      },
     });
     return () => setSceneProbe(null);
-  }, [get]);
+  }, [get, layout]);
   return null;
 }
 
-function Scene({ c, onAccent, labels }: { c: CaseFile; onAccent?: BoardProps['onAccent']; labels: RefObject<HTMLDivElement | null> }) {
+type SceneStatsFn = import('../game/testHook').SceneProbe['sceneStats'];
+
+/** Pointer travel since the last press, in CSS pixels; past this a press is a drag, not a click. */
+const CLICK_SLOP = 5;
+
+function Scene({ c, onAccent, labels, wasDrag }: {
+  c: CaseFile;
+  onAccent?: BoardProps['onAccent'];
+  labels: RefObject<HTMLDivElement | null>;
+  wasDrag: () => boolean;
+}) {
+  const parts = useRef(new Map<string, BuildingParts>());
+  const onParts = useCallback((id: string, p: BuildingParts | null) => {
+    if (p) parts.current.set(id, p);
+    else parts.current.delete(id);
+  }, []);
+  // a fresh board starts with fresh stats
+  useMemo(() => resetLive(), [c]);
   const home = useMemo(() => homeView(c.layout), [c]);
   const bounds = useMemo(() => boardBounds(c.layout), [c]);
   const pads = useMemo(() => {
@@ -232,11 +270,15 @@ function Scene({ c, onAccent, labels }: { c: CaseFile; onAccent?: BoardProps['on
           height={buildingHeight(n.kind, c.nodes[id]?.instances ?? 1)}
           position={worldPos(n.pos)}
           onAccent={onAccent}
+          onParts={onParts}
+          wasDrag={wasDrag}
           labels={labels}
         />
       ))}
+      <Traffic c={c} />
+      <Effects c={c} parts={parts} />
       <CameraRig layout={c.layout} />
-      {typeof window !== 'undefined' && window.__downtown && <Probe />}
+      {typeof window !== 'undefined' && window.__downtown && <Probe layout={c.layout} />}
     </>
   );
 }
@@ -252,6 +294,8 @@ export function Board({ onAccent }: BoardProps) {
   const c = caseId ? cases[caseId] : undefined;
   const home = useMemo(() => (c ? homeView(c.layout) : null), [c]);
   const labels = useRef<HTMLDivElement>(null);
+  const press = useRef({ x: 0, y: 0, travel: 0 });
+  const wasDrag = useCallback(() => press.current.travel > CLICK_SLOP, []);
 
   if (!hasWebGL2()) {
     return (
@@ -262,7 +306,20 @@ export function Board({ onAccent }: BoardProps) {
   }
   if (!c || !home) return null;
   return (
-    <div data-testid="board" style={{ position: 'absolute', inset: 0, background: BACKGROUND }}>
+    <div
+      data-testid="board"
+      style={{ position: 'absolute', inset: 0, background: BACKGROUND }}
+      onPointerDownCapture={(e) => {
+        press.current = { x: e.clientX, y: e.clientY, travel: 0 };
+      }}
+      onPointerMoveCapture={(e) => {
+        if (e.buttons === 0) return;
+        const p = press.current;
+        p.travel += Math.hypot(e.clientX - p.x, e.clientY - p.y);
+        p.x = e.clientX;
+        p.y = e.clientY;
+      }}
+    >
       <Canvas
         key={caseId}
         shadows="percentage"
@@ -270,7 +327,7 @@ export function Board({ onAccent }: BoardProps) {
         gl={{ antialias: true, alpha: true }}
         camera={{ fov: CAMERA.fov, near: 0.5, far: 250, position: home.position }}
       >
-        <Scene c={c} onAccent={onAccent} labels={labels} />
+        <Scene c={c} onAccent={onAccent} labels={labels} wasDrag={wasDrag} />
       </Canvas>
       {/* labels live outside the canvas's event target, so clicking one never picks the building behind it */}
       <div ref={labels} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />
