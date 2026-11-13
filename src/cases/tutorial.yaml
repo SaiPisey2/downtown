@@ -1,0 +1,117 @@
+id: tutorial
+version: 1
+title: The slow shop
+seed: 7
+maxTicks: 600
+ticksPerSecond: 10
+entry: gate
+baseRps: 400
+briefing: >-
+  Orders are failing. Three buildings sit on the main road: the gate lets
+  traffic in, the shop takes orders, the ledger writes them down. Look at the
+  shop, ask Priya what changed, then fix it.
+nodes:
+  gate: { instances: 1, rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 200, baseLatencyMs: 5 }
+  shop: { instances: 2, rpsPerInstance: 300, costMul: 1, capacityMul: 1, enabled: true, queueMax: 200, baseLatencyMs: 20 }
+  ledger: { instances: 1, rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 200, baseLatencyMs: 10 }
+edges:
+  - { from: gate, to: shop, fanout: 1, timeoutMs: 1000, retries: 0 }
+  - { from: shop, to: ledger, fanout: 1, timeoutMs: 1000, retries: 0 }
+timeline:
+  - at: 20
+    kind: deploy
+    target: shop
+    label: shop build 2
+    modifier: { target: shop, flags: { build: v2 } }
+  - at: 20
+    kind: modify
+    target: shop
+    label: shop build 2 halves capacity
+    modifier:
+      target: shop
+      mul: { capacityMul: 0.5 }
+      while: { metric: shop.flag:build, op: "==", value: v2 }
+  - { at: 25, kind: message, from: priya, lineKey: priya_ping }
+actions:
+  - id: rollback
+    target: shop
+    label: Roll back the shop
+    verb: rollback
+    delayTicks: 10
+    effects: []
+    clears: [build]
+    resolves: true
+    harmful: false
+  - id: restart
+    target: ledger
+    label: Restart the ledger
+    verb: restart
+    delayTicks: 3
+    effects:
+      - { target: ledger, set: { enabled: false }, forTicks: 15 }
+    resolves: false
+    harmful: true
+    consequenceKey: restart_bad
+win:
+  cond:
+    all:
+      - { metric: city.errorRate, op: "<", value: 0.02 }
+      - { metric: city.tick, op: ">=", value: 30 }
+  holdTicks: 10
+lose:
+  maxFailedRequests: 20000
+clues:
+  - id: new_build
+    route: changes
+    when: { metric: shop.flag:build, op: "==", value: v2 }
+    weight: 8
+    key: true
+    text: The shop got a new build at tick 20, right when the orders started to fail.
+updates:
+  - { id: investigating, label: We know orders are failing and we are looking into it., honest: true }
+  - { id: cause_found, label: The shop's latest build looks like the cause. We are rolling it back., honest: true }
+  - { id: all_fine, label: Everything is working normally., honest: false }
+scoring:
+  detectParTicks: 20
+  recoverParTicks: 30
+  updateEveryTicks: 60
+  cleanFixBonusAction: rollback
+signals:
+  graphs:
+    gate: [arrivals, errorRate]
+    shop: [saturation, errorRate, queue]
+    ledger: [arrivals, saturation]
+  logs:
+    shop:
+      - when: { metric: shop.saturation, op: ">", value: 0.95 }
+        lines:
+          - "WARN order queue is full, dropping orders"
+          - "WARN handler is slower than before"
+    ledger:
+      - when: { metric: ledger.saturation, op: "<", value: 0.5 }
+        lines:
+          - "INFO ledger is quiet"
+layout:
+  gate: { pos: [0, 0], district: edge, kind: gate, name: Gate }
+  shop: { pos: [2, 0], district: app, kind: service, name: Shop }
+  ledger: { pos: [4, 0], district: data, kind: database, name: Ledger }
+cast:
+  - id: priya
+    name: Priya
+    role: teammate
+    persona: Calm shop developer who ships often and owns up when it goes wrong.
+    knows: [new_build]
+    questions:
+      - id: changed
+        label: Did anything change today?
+        answer: I put out a new shop build a little while ago. It should be fine, but check the timing.
+      - id: ledger
+        label: Is the ledger okay?
+        answer: The ledger looks quiet to me. I would leave it alone.
+lines:
+  priya_ping: Priya - orders are timing out on my side. Can you look at the shop?
+  restart_bad: Restarting the ledger dropped the orders it was writing. Nothing improved.
+debrief:
+  happened: A new build of the shop could handle only half as many orders. Orders piled up and then got dropped until the build was rolled back.
+  realTeam: A real team would look at what changed just before the trouble began, and roll that change back before digging deeper.
+  fictionNote: All numbers in this case are made up for the tutorial.
