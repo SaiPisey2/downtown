@@ -79,7 +79,7 @@ export function Title() {
         className="btn btn-hud btn-hud-icon title-gear"
         aria-pressed={settings}
         onClick={() => (settings ? closeSettings() : setSettings(true))}
-        title="Settings: live characters with your own AI key"
+        title="Settings"
       >
         <GearIcon />
         <span className="sr-only">Settings</span>

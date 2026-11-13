@@ -15,7 +15,7 @@ export type { Cast, CastContext, CastHooks, ChatLine, ReviewContext } from './ty
 const SCRIPTED_DELAY_MS = 300;
 
 function underTest(): boolean {
-  return typeof location !== 'undefined' && new URLSearchParams(location.search).has('test', '1');
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('test') === '1';
 }
 
 /** True while the player has live characters switched on and set up. */

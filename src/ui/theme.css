@@ -2006,9 +2006,11 @@
 button.flat-tile {
   cursor: pointer;
 }
+/* the sides and bottom only: the top border is the tile's status stripe */
 button.flat-tile:hover {
-  border-color: rgba(170, 196, 240, 0.55);
-  border-top-color: inherit;
+  border-left-color: rgba(170, 196, 240, 0.55);
+  border-right-color: rgba(170, 196, 240, 0.55);
+  border-bottom-color: rgba(170, 196, 240, 0.55);
 }
 .flat-tile-warn {
   border-top-color: var(--amber);

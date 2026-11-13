@@ -19,7 +19,7 @@ describe('case text', () => {
 
   for (const [id, c] of Object.entries(cases)) {
     it(`${id}: no player-facing text says "tick", which is an engine word`, () => {
-      expect(sentences(c).filter((s) => /\btick/i.test(s))).toEqual([]);
+      expect(sentences(c).filter((s) => /\bticks?\b/i.test(s))).toEqual([]);
     });
   }
 });

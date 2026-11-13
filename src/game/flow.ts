@@ -36,7 +36,7 @@ export function markTutorialDone(): void {
 }
 
 function underTest(): boolean {
-  return typeof location !== 'undefined' && new URLSearchParams(location.search).has('test', '1');
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('test') === '1';
 }
 
 /** Off under the test hook so earlier tests can keep working on the end banner; the hook turns it on. */

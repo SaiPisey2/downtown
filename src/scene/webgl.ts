@@ -16,5 +16,5 @@ export function hasWebGL2(): boolean {
 
 /** True when the address asks for the flat board (`?flat=1`), whatever the browser can do. */
 export function flatAsked(): boolean {
-  return typeof location !== 'undefined' && new URLSearchParams(location.search).has('flat', '1');
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('flat') === '1';
 }

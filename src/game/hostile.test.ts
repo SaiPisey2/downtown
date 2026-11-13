@@ -94,6 +94,7 @@ describe('watching a replay with live characters on', () => {
   afterEach(() => {
     useLiveSettings.getState().forget();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('makes no network request from watch() to the end of the run', async () => {
@@ -116,5 +117,14 @@ describe('watching a replay with live characters on', () => {
     g().finish();
     expect(g().snap!.status).not.toBe('running');
     expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it('control: the same setup in a played run sends a free-text question to the stub', async () => {
+    // the failed request falls back to the scripted line and warns; keep the output clean
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    g().start(c.id);
+    await g().ask('netops', null, 'Is anything odd about the traffic?');
+    g().finish();
+    expect(fetchStub).toHaveBeenCalled();
   });
 });

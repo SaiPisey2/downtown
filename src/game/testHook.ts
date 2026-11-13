@@ -60,7 +60,7 @@ function needProbe(): SceneProbe {
 
 /** Installs window.__downtown only when the URL has test=1. */
 export function installTestHook(): void {
-  if (!new URLSearchParams(location.search).has('test', '1')) return;
+  if (new URLSearchParams(location.search).get('test') !== '1') return;
   window.__downtown = {
     state: () => useGame.getState(),
     setSpeed,

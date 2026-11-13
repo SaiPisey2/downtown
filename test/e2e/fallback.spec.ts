@@ -122,7 +122,14 @@ test('?flat=1 asks for the flat board even where 3D works', async ({ page }) => 
   // the edge rule at its worst: failures on the road into the edge, and the edge failing
   await jumpTo(page, 320);
   await expect(board.locator('.flat-road-fail').first()).toBeVisible();
-  await expect(board.getByRole('button', { name: /^Edge: failing/ })).toBeVisible();
+  const edge = board.getByRole('button', { name: /^Edge: failing/ });
+  await expect(edge).toBeVisible();
+  // hovering a tile keeps its red status stripe
+  const stripe = () => edge.evaluate((el) => getComputedStyle(el).borderTopColor);
+  expect(await stripe()).toBe('rgb(255, 90, 74)');
+  await edge.hover();
+  await expect.poll(() => edge.evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgba(170, 196, 240, 0.55)');
+  expect(await stripe()).toBe('rgb(255, 90, 74)');
   expect(errors).toEqual([]);
 });
 

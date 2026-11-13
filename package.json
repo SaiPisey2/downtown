@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "budget": "node scripts/budget.mjs",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "npm run build && npm test && npm run e2e"
+    "check": "npm run build && npm run budget && npm test && npm run e2e"
   },
   "dependencies": {
     "@react-three/drei": "10.7.9",
