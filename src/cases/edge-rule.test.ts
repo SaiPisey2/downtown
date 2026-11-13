@@ -176,6 +176,35 @@ describe('edge-rule case', () => {
     }
   });
 
+  it('if the fault never happens, the orders answer and clue are still true', () => {
+    // the win is switched off so the run is still going at tick 500 (filter_off early wins at about 369)
+    const run = createRun({ ...c, win: { ...c.win, holdTicks: c.maxTicks + 1 } });
+    run.step(200);
+    expect(run.act('filter_off')).toEqual({ ok: true });
+    run.step(300);
+    expect(run.log.some((e) => e.type === 'action_landed' && e.actionId === 'filter_off')).toBe(true);
+    expect(Math.max(run.snapshot.impact.errorRate, run.snapshot.nodes.edge!.saturation)).toBeLessThan(0.5);
+    const said = answerFor(c, 'devlead', 'orders', run.snapshot);
+    const found = run.observe('ask:devlead:orders');
+    expect(found.map((x) => x.id)).toEqual(['orders_change_small']);
+    for (const t of [said, found[0]!.text]) expect(t).not.toMatch(/after|before|broke|trouble|already/i);
+  });
+
+  it('the shipped answer follows the rules deploy from its own tick, and stays true after a rollback', () => {
+    const run = createRun(c);
+    run.step(239);
+    expect(answerFor(c, 'devlead', 'shipped', run.snapshot)).toBe('Nothing has shipped yet today.');
+    run.step(1);
+    expect(answerFor(c, 'devlead', 'shipped', run.snapshot)).toMatch(/rules update/);
+    expect(run.observe('ask:devlead:shipped').map((x) => x.id)).toEqual(['rules_today']);
+    const rolled = createRun(c);
+    rolled.step(250);
+    rolled.act('rollback_rules');
+    rolled.step(310);
+    expect(rolled.log.some((e) => e.type === 'action_landed' && e.actionId === 'rollback_rules')).toBe(true);
+    expect(answerFor(c, 'devlead', 'shipped', rolled.snapshot)).toMatch(/rules update/);
+  });
+
   it('keeps the cast honest: teammates have 3-4 questions, the stakeholder none, every answer that tells a fact reveals a clue', () => {
     for (const m of c.cast) {
       if (m.role === 'stakeholder') expect(m.questions).toHaveLength(0);

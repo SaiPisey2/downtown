@@ -189,14 +189,15 @@ clues:
     text: Nobody changed the network today.
   - id: rules_today
     route: ask:devlead:shipped
-    when: { metric: city.tick, op: ">=", value: 242 }
+    # the deploy's own tick; the rules flag alone would read false again after rollback_rules clears it
+    when: { metric: city.tick, op: ">=", value: 240 }
     weight: 7
     text: A rules update for the filter went out today. Rules updates reach every edge machine at the same time.
   - id: orders_change_small
     route: ask:devlead:orders
     when: { metric: city.tick, op: ">=", value: 420 }
     weight: 2
-    text: The orders deploy only changed some wording, and it went out after the trouble began.
+    text: The orders deploy only changed some wording on the order page. It does not touch how orders are handled.
   - id: db_quiet
     route: ask:devlead:db
     when: { metric: edge.saturation, op: ">", value: 0.95 }
@@ -294,7 +295,7 @@ cast:
         reveals: rules_today
       - id: orders
         label: What was in the orders deploy?
-        answer: Wording fixes on the order page. It went out after things had already broken.
+        answer: Wording fixes on the order page. Nothing that changes how orders are handled.
         answerBefore: No orders deploy has gone out today.
         reveals: orders_change_small
       - id: db
