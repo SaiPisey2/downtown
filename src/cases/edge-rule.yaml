@@ -121,7 +121,7 @@ actions:
   - id: unblock_sources
     target: gate
     label: Lift the block at the gate
-    risk: Everyone the block was turning away can come in again.
+    risk: Anyone a block at the gate is turning away can come in again.
     verb: block
     delayTicks: 10
     effects: []
