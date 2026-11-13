@@ -180,3 +180,33 @@ export function padRadius(layout: Layout): number {
   }
   return Math.min(2.3, Math.max(1.3, gap / 2 - 0.25));
 }
+
+/** Camera orbit in spherical terms around the target: theta is azimuth, phi is polar angle from +y. */
+export interface Orbit {
+  theta: number;
+  phi: number;
+  radius: number;
+}
+
+/**
+ * Keyboard intent as signed rates (or, with dt = 1, signed key-seconds): yaw
+ * (positive turns right), pitch (positive tilts toward the horizon), zoom (positive moves in).
+ */
+export interface OrbitInput {
+  yaw: number;
+  pitch: number;
+  zoom: number;
+}
+
+/** Radians per second of yaw and pitch, and e-folds per second of zoom, for held keys. */
+export const KEY_RATES = { yaw: 1.6, pitch: 0.9, zoom: 1.4 } as const;
+
+/** One keyboard step of the orbit, held inside the polar and distance limits. */
+export function stepOrbit(o: Orbit, input: OrbitInput, dt: number): Orbit {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+  return {
+    theta: o.theta + input.yaw * KEY_RATES.yaw * dt,
+    phi: clamp(o.phi + input.pitch * KEY_RATES.pitch * dt, CAMERA.minPolar, CAMERA.maxPolar),
+    radius: clamp(o.radius * Math.exp(-input.zoom * KEY_RATES.zoom * dt), CAMERA.minDistance, CAMERA.maxDistance),
+  };
+}

@@ -7,6 +7,7 @@ import {
   homeView,
   padOutline,
   padRadius,
+  stepOrbit,
   tint,
   worldPos,
 } from './mapping';
@@ -110,3 +111,25 @@ function segDist(p: [number, number], a: [number, number], b: [number, number]):
   const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz)));
   return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz);
 }
+
+describe('stepOrbit', () => {
+  const o = { theta: 0, phi: CAMERA.homePolar, radius: 30 };
+  it('turns, tilts and zooms with the keys', () => {
+    const n = stepOrbit(o, { yaw: 1, pitch: 1, zoom: 1 }, 0.1);
+    expect(n.theta).toBeGreaterThan(0);
+    expect(n.phi).toBeGreaterThan(o.phi);
+    expect(n.radius).toBeLessThan(30);
+  });
+  it('never leaves the polar and distance limits', () => {
+    let a = o;
+    let b = o;
+    for (let i = 0; i < 500; i++) {
+      a = stepOrbit(a, { yaw: 0, pitch: 1, zoom: 1 }, 0.1);
+      b = stepOrbit(b, { yaw: 0, pitch: -1, zoom: -1 }, 0.1);
+    }
+    expect(a.phi).toBe(CAMERA.maxPolar);
+    expect(a.radius).toBe(CAMERA.minDistance);
+    expect(b.phi).toBe(CAMERA.minPolar);
+    expect(b.radius).toBe(CAMERA.maxDistance);
+  });
+});

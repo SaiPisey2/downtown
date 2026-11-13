@@ -19,6 +19,23 @@ async function start(page: Page, caseId: string): Promise<void> {
 
 const target = (page: Page) => page.evaluate(() => window.__downtown!.camera().target);
 const dist = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const cam = (page: Page) => page.evaluate(() => window.__downtown!.camera());
+const reach = async (page: Page) => {
+  const c = await cam(page);
+  return dist(c.position, c.target);
+};
+/** Waits until the camera holds still for 300 ms, so pending key presses and damping have played out. */
+async function settled(page: Page) {
+  let last = await cam(page);
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(300);
+    const now = await cam(page);
+    const moved = dist(now.position, last.position) + dist(now.target, last.target);
+    last = now;
+    if (moved < 1e-4) return now;
+  }
+  throw new Error('camera never settled');
+}
 
 test('the tutorial board draws, labels its buildings and selects them', async ({ page }) => {
   const errors = collectErrors(page);
@@ -48,6 +65,58 @@ test('the tutorial board draws, labels its buildings and selects them', async ({
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__downtown!.state().selected)).toBe('ledger');
 
+  expect(errors).toEqual([]);
+});
+
+test('the camera can be driven from the keyboard alone', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page, 'tutorial');
+  // the board registers its probe once it has mounted; until then the hook throws
+  await expect
+    .poll(() => page.evaluate(() => window.__downtown!.canvasColors()).catch(() => 0))
+    .toBeGreaterThan(1);
+  const home = await settled(page);
+
+  // ArrowRight orbits: the camera moves, the point it looks at does not
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => dist((await cam(page)).position, home.position)).toBeGreaterThan(0.1);
+  expect(dist((await settled(page)).target, home.target)).toBeLessThan(1e-6);
+
+  // + zooms in, and never past the closest distance
+  const before = await reach(page);
+  await page.keyboard.press('+');
+  await expect.poll(() => reach(page)).toBeLessThan(before - 0.1);
+  for (let i = 0; i < 40; i++) await page.keyboard.press('+');
+  await settled(page);
+  expect(await reach(page)).toBeGreaterThanOrEqual(12 - 1e-6);
+
+  // - zooms out, and never past the farthest distance
+  for (let i = 0; i < 60; i++) await page.keyboard.press('-');
+  await settled(page);
+  expect(await reach(page)).toBeLessThanOrEqual(60 + 1e-6);
+  expect(await reach(page)).toBeGreaterThan(55);
+
+  // Shift+ArrowLeft pans: the target moves
+  await page.keyboard.press('Shift+ArrowLeft');
+  await expect.poll(async () => dist(await target(page), home.target)).toBeGreaterThan(0.1);
+
+  // keys typed into a text field leave the camera alone
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.id = 'typing';
+    document.body.append(input);
+  });
+  const resting = await settled(page);
+  await page.locator('#typing').focus();
+  for (const k of ['ArrowRight', 'ArrowUp', '+', '-', 'h', 'Shift+ArrowLeft']) await page.keyboard.press(k);
+  const after = await settled(page);
+  expect(dist(after.position, resting.position)).toBeLessThan(1e-6);
+  await page.locator('#typing').blur();
+
+  // h still goes home
+  await page.keyboard.press('h');
+  await expect.poll(async () => dist(await target(page), home.target)).toBeLessThan(0.05);
+  await expect.poll(async () => dist((await cam(page)).position, home.position)).toBeLessThan(0.05);
   expect(errors).toEqual([]);
 });
 
