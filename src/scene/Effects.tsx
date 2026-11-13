@@ -16,7 +16,7 @@ import type { NodeView, Snapshot } from '../sim';
 import type { BuildingParts } from './Building';
 import { calmMotion, live, nodeLook } from './live';
 import { tintInto, worldPos } from './mapping';
-import { craneOn, glowLevel, healthyInflow, windowLevel, visualRng } from './traffic';
+import { craneOn, glowLevel, healthyInflow, windowLevel, visualRng } from './dots';
 
 /** Emissive colour a saturated building's accent heats toward. */
 const HOT = new Color('#ff1e0a');

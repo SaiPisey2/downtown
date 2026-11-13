@@ -16,6 +16,8 @@ export interface GameState {
   selected: NodeId | null;
   /** bumped by every select(), so selecting the selected building again still re-centres the camera */
   selectSeq: number;
+  /** bumped by goHome(); the camera eases back to the home view */
+  homeSeq: number;
   /** calmer board: no smoke or pulsing, slower dots (the OS setting applies as well) */
   reducedMotion: boolean;
   /** last 120 values per `${node}.${metric}`, one per simulated tick */
@@ -32,6 +34,7 @@ export interface GameState {
   hint(): void;
   setPaused(p: boolean, reason?: 'user' | 'hidden'): void;
   select(id: NodeId | null): void;
+  goHome(): void;
   setReducedMotion(on: boolean): void;
   finish(): void;
 }
@@ -56,6 +59,7 @@ export const useGame = create<GameState>()((set, get) => ({
   pauseReason: null,
   selected: null,
   selectSeq: 0,
+  homeSeq: 0,
   reducedMotion: false,
   history: {},
   log: [],
@@ -111,6 +115,9 @@ export const useGame = create<GameState>()((set, get) => ({
   },
   select(id) {
     set((s) => ({ selected: id, selectSeq: s.selectSeq + 1 }));
+  },
+  goHome() {
+    set((s) => ({ homeSeq: s.homeSeq + 1 }));
   },
   setReducedMotion(on) {
     set({ reducedMotion: on });

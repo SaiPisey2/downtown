@@ -139,6 +139,7 @@ export const caseSchema = o({
       harmful: z.boolean(),
       consequenceKey: str.optional(),
       once: z.boolean().optional(),
+      risk: z.string().min(1).optional(),
     }),
   ),
   win: o({ cond, holdTicks: posInt }),

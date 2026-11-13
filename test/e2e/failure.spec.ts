@@ -18,22 +18,36 @@ async function start(page: Page, caseId: string): Promise<void> {
 }
 
 /**
- * Jumps the simulation straight to `tick` in one synchronous step, then lets it
- * run on at normal speed so the dots keep moving.
+ * Jumps the simulation straight to `tick` in one synchronous step and leaves it
+ * paused there, so nothing the test reads can drift past the moment it asked for.
  */
 async function jumpTo(page: Page, tick: number): Promise<void> {
   const reached = await page.evaluate((target) => {
     const h = window.__downtown!;
+    h.state().setPaused(false);
     const now = h.state().snap!.tick;
     // advance() takes at most 250 ms at a time; edge-rule runs 4 ticks per second
     h.setSpeed((target - now) / (0.25 * 4));
     h.advance(250);
     h.setSpeed(1);
-    // read in the same task: the next frame may already step on
+    // pause in the same task: the next frame would otherwise step on
+    h.state().setPaused(true, 'user');
     return h.state().snap!.tick;
   }, tick);
   expect(reached).toBe(tick);
 }
+
+/** Lets time run (dots only move while it does) until `wait` resolves, then pauses again. */
+async function running<T>(page: Page, wait: () => Promise<T>): Promise<T> {
+  await page.evaluate(() => window.__downtown!.state().setPaused(false));
+  try {
+    return await wait();
+  } finally {
+    await page.evaluate(() => window.__downtown!.state().setPaused(true, 'user'));
+  }
+}
+
+const tickNow = (page: Page) => page.evaluate(() => window.__downtown!.state().snap!.tick);
 
 const stats = (page: Page) => page.evaluate(() => window.__downtown!.sceneStats());
 
@@ -43,7 +57,9 @@ test('the edge-rule city shows where it broke and that it spread', async ({ page
   await start(page, 'edge-rule');
 
   await jumpTo(page, 200);
-  await expect.poll(async () => (await stats(page)).dots, { timeout: 15_000 }).toBeGreaterThan(0);
+  await running(page, () => expect.poll(async () => (await stats(page)).dots, { timeout: 8_000 }).toBeGreaterThan(0));
+  // the rules update goes out at tick 240; the calm picture must come from before it
+  expect(await tickNow(page)).toBeLessThan(240);
   const calm = await stats(page);
   expect(calm.failedDots).toBe(0);
   expect(calm.retryDots).toBe(0);
@@ -56,15 +72,17 @@ test('the edge-rule city shows where it broke and that it spread', async ({ page
   expect(calm.smoke).toBe(0);
 
   await jumpTo(page, 320);
-  await expect.poll(async () => (await stats(page)).failedDots, { timeout: 15_000 }).toBeGreaterThan(0);
-  // the share of dots in trouble, not their number: thinning may halve the total.
-  // The old calm dots on the roads out of the edge drain as they arrive, so wait for the mix to turn over.
-  await expect
-    .poll(async () => {
-      const s = await stats(page);
-      return (s.failedDots + s.retryDots) / s.dots;
-    }, { timeout: 15_000 })
-    .toBeGreaterThan(0.35);
+  await running(page, async () => {
+    await expect.poll(async () => (await stats(page)).failedDots, { timeout: 15_000 }).toBeGreaterThan(0);
+    // the share of dots in trouble, not their number: thinning may halve the total.
+    // The old calm dots on the roads out of the edge drain as they arrive, so wait for the mix to turn over.
+    await expect
+      .poll(async () => {
+        const s = await stats(page);
+        return (s.failedDots + s.retryDots) / s.dots;
+      }, { timeout: 15_000 })
+      .toBeGreaterThan(0.35);
+  });
   const bad = await stats(page);
   expect(bad.retryDots).toBeGreaterThan(0);
   const edge = bad.nodes.edge!;
@@ -78,7 +96,7 @@ test('the edge-rule city shows where it broke and that it spread', async ({ page
   expect(bad.nodes.web!.tint[1]).toBeGreaterThan(bad.nodes.web!.tint[0]);
   expect(bad.nodes.filter!.crane).toBe(true);
   expect(bad.nodes.edge!.crane).toBe(false);
-  await expect.poll(async () => (await stats(page)).smoke, { timeout: 15_000 }).toBeGreaterThan(0);
+  await running(page, () => expect.poll(async () => (await stats(page)).smoke, { timeout: 15_000 }).toBeGreaterThan(0));
 
   expect(errors).toEqual([]);
 });
@@ -88,8 +106,10 @@ test('reduced motion stops the smoke', async ({ page }) => {
   await start(page, 'edge-rule');
   await page.evaluate(() => window.__downtown!.state().setReducedMotion(true));
   await jumpTo(page, 320);
-  await expect.poll(async () => (await stats(page)).failedDots, { timeout: 15_000 }).toBeGreaterThan(0);
-  await page.waitForTimeout(1000);
+  await running(page, async () => {
+    await expect.poll(async () => (await stats(page)).failedDots, { timeout: 15_000 }).toBeGreaterThan(0);
+    await page.waitForTimeout(1000);
+  });
   expect((await stats(page)).smoke).toBe(0);
   expect((await stats(page)).nodes.edge!.glow).toBeGreaterThan(0);
 });

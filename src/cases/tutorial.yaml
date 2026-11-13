@@ -3,7 +3,7 @@ version: 1
 title: The slow shop
 seed: 7
 maxTicks: 600
-ticksPerSecond: 10
+ticksPerSecond: 4
 entry: gate
 baseRps: 400
 briefing: >-
@@ -15,15 +15,15 @@ nodes:
   shop: { instances: 2, rpsPerInstance: 300, costMul: 1, capacityMul: 1, enabled: true, queueMax: 200, baseLatencyMs: 20 }
   ledger: { instances: 1, rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 200, baseLatencyMs: 10 }
 edges:
-  - { from: gate, to: shop, fanout: 1, timeoutMs: 1000, retries: 0 }
+  - { from: gate, to: shop, fanout: 1, timeoutMs: 3000, retries: 0 }
   - { from: shop, to: ledger, fanout: 1, timeoutMs: 1000, retries: 0 }
 timeline:
-  - at: 20
+  - at: 12
     kind: deploy
     target: shop
     label: shop build 2
     modifier: { target: shop, flags: { build: v2 } }
-  - at: 20
+  - at: 12
     kind: modify
     target: shop
     label: shop build 2 halves capacity
@@ -31,11 +31,12 @@ timeline:
       target: shop
       mul: { capacityMul: 0.5 }
       while: { metric: shop.flag:build, op: "==", value: v2 }
-  - { at: 25, kind: message, from: priya, lineKey: priya_ping }
+  - { at: 16, kind: message, from: priya, lineKey: priya_ping }
 actions:
   - id: rollback
     target: shop
     label: Roll back the shop
+    risk: The shop goes back to its previous build, and whatever the new build added goes with it.
     verb: rollback
     delayTicks: 10
     effects: []
@@ -45,6 +46,7 @@ actions:
   - id: restart
     target: ledger
     label: Restart the ledger
+    risk: The ledger stops for a few seconds while it restarts, and orders it is writing at that moment are lost.
     verb: restart
     delayTicks: 3
     effects:
@@ -59,22 +61,22 @@ win:
       - { metric: city.tick, op: ">=", value: 30 }
   holdTicks: 10
 lose:
-  maxFailedRequests: 20000
+  maxFailedRequests: 50000
 clues:
   - id: new_build
     route: changes
     when: { metric: shop.flag:build, op: "==", value: v2 }
     weight: 8
     key: true
-    text: The shop got a new build at tick 20, right when the orders started to fail.
+    text: The shop got a new build just before the orders started to fail.
 updates:
   - { id: investigating, label: We know orders are failing and we are looking into it., honest: true }
   - { id: cause_found, label: The shop's latest build looks like the cause. We are rolling it back., honest: true }
   - { id: all_fine, label: Everything is working normally., honest: false }
 scoring:
-  detectParTicks: 20
-  recoverParTicks: 30
-  updateEveryTicks: 60
+  detectParTicks: 60
+  recoverParTicks: 120
+  updateEveryTicks: 120
   cleanFixBonusAction: rollback
 signals:
   graphs:

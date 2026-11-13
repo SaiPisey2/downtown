@@ -13,8 +13,8 @@ import {
   stepThinning,
   visualRng,
   windowLevel,
-} from './traffic';
-import type { Dot } from './traffic';
+} from './dots';
+import type { Dot } from './dots';
 
 const ev = (rate: number, retryRate = 0, failRate = 0): EdgeView => ({ rate, retryRate, failRate });
 const total = (b: ReturnType<typeof dotBudget>) =>

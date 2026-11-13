@@ -75,6 +75,8 @@ export interface ActionDef {
   harmful: boolean;
   consequenceKey?: string;
   once?: boolean;
+  /** one plain line shown before the player confirms; never says whether it is the right fix */
+  risk?: string;
 }
 
 export interface CaseModel {

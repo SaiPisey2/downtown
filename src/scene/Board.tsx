@@ -1,4 +1,4 @@
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 import {
@@ -6,6 +6,7 @@ import {
   ExtrudeGeometry,
   MeshStandardMaterial,
   Object3D,
+  PerspectiveCamera,
   Shape,
   SRGBColorSpace,
   Vector3,
@@ -32,8 +33,7 @@ import {
 } from './mapping';
 import type { District, Vec3 } from './mapping';
 import { Roads } from './Roads';
-// explicit extension: on a case-insensitive disk './Traffic' would resolve to the pure './traffic.ts'
-import { Traffic } from './Traffic.tsx';
+import { Traffic } from './Traffic';
 import { hasWebGL2 } from './webgl';
 
 const BACKGROUND = 'radial-gradient(ellipse 120% 90% at 50% 30%, #1a2950 0%, #0d1630 55%, #060a18 100%)';
@@ -209,12 +209,43 @@ function Probe({ layout }: { layout: CaseFile['layout'] }) {
 
 type SceneStatsFn = import('../game/testHook').SceneProbe['sceneStats'];
 
+/** Per-second rate of the ease when a dock opens or closes. */
+const INSET_EASE = 8;
+
+/**
+ * Shifts the picture sideways so the middle of the city sits in the middle of
+ * the space the docks leave free, while the canvas still fills the window.
+ */
+function ViewInset({ left, right }: { left: number; right: number }) {
+  const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  const shift = useRef(0);
+  const goal = (right - left) / 2;
+  useEffect(
+    () => () => {
+      if (camera instanceof PerspectiveCamera) camera.clearViewOffset();
+    },
+    [camera],
+  );
+  useFrame((_, dt) => {
+    if (!(camera instanceof PerspectiveCamera)) return;
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) * INSET_EASE);
+    const next = Math.abs(goal - shift.current) < 0.5 ? goal : shift.current + (goal - shift.current) * k;
+    const v = camera.view;
+    if (v?.enabled && next === shift.current && v.fullWidth === size.width && v.fullHeight === size.height) return;
+    shift.current = next;
+    camera.setViewOffset(size.width, size.height, next, 0, size.width, size.height);
+  });
+  return null;
+}
+
 /** Pointer travel since the last press, in CSS pixels; past this a press is a drag, not a click. */
 const CLICK_SLOP = 5;
 
-function Scene({ c, onAccent, labels, wasDrag }: {
+function Scene({ c, onAccent, labels, wasDrag, inset }: {
   c: CaseFile;
   onAccent?: BoardProps['onAccent'];
+  inset: { left: number; right: number };
   labels: RefObject<HTMLDivElement | null>;
   wasDrag: () => boolean;
 }) {
@@ -278,6 +309,7 @@ function Scene({ c, onAccent, labels, wasDrag }: {
       <Traffic c={c} />
       <Effects c={c} parts={parts} />
       <CameraRig layout={c.layout} />
+      <ViewInset left={inset.left} right={inset.right} />
       {typeof window !== 'undefined' && window.__downtown && <Probe layout={c.layout} />}
     </>
   );
@@ -286,10 +318,13 @@ function Scene({ c, onAccent, labels, wasDrag }: {
 export interface BoardProps {
   /** Receives each building's tintable accent material (null when it unmounts), for colouring from outside React. */
   onAccent?: (nodeId: string, material: MeshStandardMaterial | null) => void;
+  /** CSS pixels covered by docks at each side; the city is centred in what is left */
+  insetLeft?: number;
+  insetRight?: number;
 }
 
 /** The 3D city for the current case: a function of the store, nothing else. */
-export function Board({ onAccent }: BoardProps) {
+export function Board({ onAccent, insetLeft = 0, insetRight = 0 }: BoardProps) {
   const caseId = useGame((s) => s.caseId);
   const c = caseId ? cases[caseId] : undefined;
   const home = useMemo(() => (c ? homeView(c.layout) : null), [c]);
@@ -327,7 +362,7 @@ export function Board({ onAccent }: BoardProps) {
         gl={{ antialias: true, alpha: true }}
         camera={{ fov: CAMERA.fov, near: 0.5, far: 250, position: home.position }}
       >
-        <Scene c={c} onAccent={onAccent} labels={labels} wasDrag={wasDrag} />
+        <Scene c={c} onAccent={onAccent} labels={labels} wasDrag={wasDrag} inset={{ left: insetLeft, right: insetRight }} />
       </Canvas>
       {/* labels live outside the canvas's event target, so clicking one never picks the building behind it */}
       <div ref={labels} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />

@@ -8,8 +8,8 @@ import type { Snapshot } from '../sim';
 import { calmMotion, fps, fpsSamples, live, nodeLook, recordFrame } from './live';
 import { worldPos } from './mapping';
 import { ROAD_TOP } from './Roads';
-import { QUEUE_STACK, dotBudget, healthyInflow, queueStack, stepDots, stepThinning, visualRng } from './traffic';
-import type { Dot, DotBudget } from './traffic';
+import { QUEUE_STACK, dotBudget, healthyInflow, queueStack, stepDots, stepThinning, visualRng } from './dots';
+import type { Dot, DotBudget } from './dots';
 
 /** Instance capacity of the dot mesh; also the most dots ever shown. */
 export const DOT_CAPACITY = 2000;

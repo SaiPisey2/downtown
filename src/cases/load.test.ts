@@ -45,6 +45,17 @@ describe('tutorial case', () => {
     expect(run.snapshot.status).toBe('lost');
   });
 
+  it('shows the fault within a few seconds but gives a first-time player two minutes', () => {
+    const c = cases.tutorial!;
+    expect(c.ticksPerSecond).toBe(4);
+    const run = createRun(c);
+    // the fault is on the city's error rate within five seconds of play
+    run.step(5 * c.ticksPerSecond);
+    expect(run.snapshot.impact.errorRate).toBeGreaterThan(0.1);
+    run.step(480 - run.snapshot.tick);
+    expect(run.snapshot.status).toBe('running');
+  });
+
   it('is won by rolling back the shop after the fault', () => {
     const run = createRun(cases.tutorial!);
     run.step(22);
@@ -196,6 +207,17 @@ describe('review follow-ups', () => {
     expectFail((d) => (d.timeline[1].modifier.mul.capacityMul = -2), 'capacityMul');
     expectFail((d) => (d.actions[1].effects[0].forTicks = 2.5), 'actions.1.effects.0.forTicks');
     expectFail((d) => (d.actions[1].effects[0].forTicks = 0), 'forTicks');
+  });
+});
+
+describe('action risk notes', () => {
+  it('accepts a risk line and rejects an empty or non-string one', () => {
+    expect(parseCase(text, PATH).actions[0]!.risk).toMatch(/\w/);
+    expectFail((d) => (d.actions[0].risk = ''), 'actions.0.risk');
+    expectFail((d) => (d.actions[0].risk = 3), 'actions.0.risk');
+  });
+  it('every action in every case says its risk', () => {
+    for (const c of Object.values(cases)) for (const a of c.actions) expect(a.risk, `${c.id}/${a.id}`).toMatch(/\w/);
   });
 });
 

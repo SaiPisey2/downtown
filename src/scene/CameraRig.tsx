@@ -39,13 +39,21 @@ const TAP_SECONDS = 0.12;
 /** Pan speed in camera distances per second. */
 const PAN_RATE = 0.7;
 
-function isTyping(el: EventTarget | null): boolean {
-  return el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+/**
+ * Camera keys belong to the board: they act only with focus on the page itself,
+ * the canvas or a building label, never inside a panel, tab list, dialog or any
+ * other control, where arrows and letters have their own jobs.
+ */
+function boardHasFocus(el: EventTarget | null): boolean {
+  if (!(el instanceof Element)) return true;
+  if (el === document.body || el === document.documentElement) return true;
+  if (el instanceof HTMLCanvasElement) return true;
+  return el instanceof HTMLElement && el.dataset.node !== undefined;
 }
 
 /**
  * Orbit controls within fixed limits, pan kept over the board, easing to the
- * selected building and `H` for the home view. From the keyboard: arrows orbit
+ * selected building and `H` (or goHome() in the store) for the home view. From the keyboard: arrows orbit
  * and tilt, Shift+arrows pan, `+`/`-` zoom, all driven per frame from the set
  * of held keys. Everything runs on refs inside
  * useFrame, so camera motion never re-renders React.
@@ -82,17 +90,21 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
   useEffect(
     () =>
       useGame.subscribe((s, prev) => {
+        if (s.homeSeq !== prev.homeSeq) {
+          goal.current = { target: new Vector3(...home.target), position: new Vector3(...home.position) };
+          return;
+        }
         // every select() counts, so picking the selected building again re-centres on it
         if (s.selectSeq === prev.selectSeq || !s.selected) return;
         const n = layout[s.selected];
         if (n) goal.current = { target: new Vector3(...worldPos(n.pos)) };
       }),
-    [layout],
+    [layout, home],
   );
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || !boardHasFocus(e.target)) return;
       shift.current = e.shiftKey;
       if (e.key.toLowerCase() === 'h') {
         goal.current = { target: new Vector3(...home.target), position: new Vector3(...home.position) };

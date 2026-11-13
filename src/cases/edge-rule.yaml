@@ -69,6 +69,7 @@ actions:
   - id: filter_off
     target: filter
     label: Switch the filter off everywhere
+    risk: Requests reach the city unchecked for as long as the filter stays off.
     verb: switch
     delayTicks: 20
     effects:
@@ -79,6 +80,7 @@ actions:
   - id: rollback_rules
     target: filter
     label: Roll back the rules update
+    risk: Every edge machine goes back to the previous rules. A rollout this wide is slow.
     verb: rollback
     delayTicks: 300
     effects: []
@@ -89,6 +91,7 @@ actions:
   - id: restart_edge
     target: edge
     label: Restart the edge machines
+    risk: Edge machines drop what they are doing while they restart and serve less until they warm up.
     verb: restart
     delayTicks: 10
     effects:
@@ -99,6 +102,7 @@ actions:
   - id: block_sources
     target: gate
     label: Block the busiest sources at the gate
+    risk: Everyone from the busiest sources is turned away at the gate, whoever they are.
     verb: block
     delayTicks: 10
     effects:
@@ -116,6 +120,7 @@ actions:
   - id: unblock_sources
     target: gate
     label: Lift the block at the gate
+    risk: Everyone the block was turning away can come in again.
     verb: block
     delayTicks: 10
     effects: []
@@ -126,6 +131,7 @@ actions:
   - id: scale_api
     target: api
     label: Double the api servers
+    risk: The new api servers take a while to start, and they cost money for as long as they run.
     verb: scale
     delayTicks: 40
     effects:
@@ -136,6 +142,7 @@ actions:
   - id: rollback_orders
     target: orders
     label: Roll back the orders deploy
+    risk: The orders service restarts to roll back and serves less while it warms up.
     verb: rollback
     delayTicks: 30
     effects:
