@@ -38,18 +38,41 @@ const posInt = z.number().int().min(1);
 const str = z.string();
 const flagValue = z.union([z.string(), z.boolean()]);
 
-const cond: z.ZodType<Cond> = z.lazy(() =>
-  z.union([
-    o({
-      metric: str,
-      op: z.enum(['<', '<=', '>', '>=', '==', '!=']),
-      value: z.union([num, z.boolean(), str]),
-    }),
-    o({ all: z.array(cond) }),
-    o({ any: z.array(cond) }),
-    o({ not: cond }),
-  ]),
-);
+const OPS = ['<', '<=', '>', '>=', '==', '!='] as const;
+const COND_SHAPES = 'expected {metric, op, value}, {all: [...]}, {any: [...]} or {not: {...}}';
+
+/** Problems with a condition, each as [path, message]; names the bad key or value. */
+function condProblems(v: unknown, path: (string | number)[] = []): [(string | number)[], string][] {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return [[path, `not a condition (${COND_SHAPES})`]];
+  const keys = Object.keys(v);
+  const rec = v as Record<string, unknown>;
+  const only = (allowed: string[]): [(string | number)[], string][] =>
+    keys.filter((k) => !allowed.includes(k)).map((k) => [path, `unknown key "${k}" in condition (${COND_SHAPES})`]);
+  for (const join of ['all', 'any'] as const) {
+    if (!keys.includes(join)) continue;
+    const list = rec[join];
+    if (!Array.isArray(list)) return [...only([join]), [[...path, join], `"${join}" must be a list of conditions`]];
+    return [...only([join]), ...list.flatMap((x, i) => condProblems(x, [...path, join, i]))];
+  }
+  if (keys.includes('not')) return [...only(['not']), ...condProblems(rec.not, [...path, 'not'])];
+  if (!keys.some((k) => ['metric', 'op', 'value'].includes(k))) {
+    return keys.length ? only([]) : [[path, `empty condition (${COND_SHAPES})`]];
+  }
+  const out = only(['metric', 'op', 'value']);
+  if (typeof rec.metric !== 'string') out.push([[...path, 'metric'], `"metric" must be a string, got ${JSON.stringify(rec.metric)}`]);
+  if (!(OPS as readonly unknown[]).includes(rec.op)) {
+    out.push([[...path, 'op'], `"op" must be one of ${OPS.join(' ')}, got ${JSON.stringify(rec.op)}`]);
+  }
+  const val = rec.value;
+  if (!(typeof val === 'string' || typeof val === 'boolean' || (typeof val === 'number' && Number.isFinite(val)))) {
+    out.push([[...path, 'value'], `"value" must be a finite number, boolean or string, got ${JSON.stringify(val)}`]);
+  }
+  return out;
+}
+
+const cond = z.custom<Cond>().superRefine((v, ctx) => {
+  for (const [path, message] of condProblems(v)) ctx.addIssue({ code: 'custom', message, path });
+});
 
 const nodeParams = o({
   instances: nonNeg,
@@ -64,10 +87,10 @@ const nodeParams = o({
 const modifier = o({
   target: str,
   set: nodeParams.partial().optional(),
-  mul: o({ costMul: num, capacityMul: num, instances: num }).partial().optional(),
+  mul: o({ costMul: pos, capacityMul: pos, instances: pos }).partial().optional(),
   flags: z.record(str, flagValue).optional(),
   while: cond.optional(),
-  forTicks: pos.optional(),
+  forTicks: posInt.optional(),
 });
 
 export const NODE_VIEW_KEYS = [

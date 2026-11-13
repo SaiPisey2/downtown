@@ -157,7 +157,8 @@ function check(c: CaseFile): string[] {
       const node = a.slice(0, dot);
       const metric = a.slice(dot + 1);
       const shown = dot > 0 && has(c.signals.graphs, node) ? c.signals.graphs[node]! : [];
-      if (dot <= 0 || !isNode(node)) issues.push(`${w}: unknown node "${node}"`);
+      if (dot <= 0) issues.push(`${w}: a graph route must be "graph:<node>.<metric>"`);
+      else if (!isNode(node)) issues.push(`${w}: unknown node "${node}"`);
       else if (!(shown as string[]).includes(metric)) issues.push(`${w}: "${metric}" is not among the graphs of "${node}"`);
     } else if (kind === 'log' && b === undefined && a) {
       if (!isNode(a)) issues.push(`${w}: unknown node "${a}"`);

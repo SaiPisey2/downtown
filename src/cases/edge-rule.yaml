@@ -1,0 +1,326 @@
+id: edge-rule
+version: 1
+title: The rule that ate the city
+seed: 1907
+maxTicks: 3600
+ticksPerSecond: 4
+entry: gate
+baseRps: 2000
+source:
+  url: https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/
+  publisher: Cloudflare
+  date: "2019-07-02"
+briefing: >-
+  You are on call for a busy city of web services. Visitors come in through the
+  gate, pass the edge, where every request is checked by the filter, and go on
+  to the web and api districts and the data behind them. It is a quiet
+  afternoon. Keep an eye on the city, and if it starts to go down, find out why
+  and bring it back. Keep people told as you go.
+
+nodes:
+  gate:     { instances: 1,  rpsPerInstance: 2020, costMul: 1, capacityMul: 1, enabled: true, queueMax: 0,    baseLatencyMs: 1 }
+  edge:     { instances: 10, rpsPerInstance: 7080, costMul: 1, capacityMul: 1, enabled: true, queueMax: 400,  baseLatencyMs: 2 }
+  filter:   { instances: 1,  rpsPerInstance: 100,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 0,    baseLatencyMs: 1 }
+  web:      { instances: 6,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 4000, baseLatencyMs: 10 }
+  api:      { instances: 4,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 10 }
+  cache:    { instances: 4,  rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 2 }
+  accounts: { instances: 3,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 2000, baseLatencyMs: 5 }
+  orders:   { instances: 2,  rpsPerInstance: 250,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 1000, baseLatencyMs: 5 }
+  db:       { instances: 3,  rpsPerInstance: 1000, costMul: 1, capacityMul: 1, enabled: true, queueMax: 3000, baseLatencyMs: 5 }
+
+edges:
+  - { from: gate,     to: edge,     fanout: 1,   timeoutMs: 10000, retries: 3 }
+  - { from: edge,     to: web,      fanout: 0.6, timeoutMs: 5000,  retries: 0 }
+  - { from: edge,     to: api,      fanout: 0.4, timeoutMs: 5000,  retries: 0 }
+  - { from: web,      to: cache,    fanout: 1,   timeoutMs: 5000,  retries: 0 }
+  - { from: web,      to: accounts, fanout: 0.2, timeoutMs: 5000,  retries: 0 }
+  - { from: api,      to: accounts, fanout: 0.3, timeoutMs: 5000,  retries: 0 }
+  - { from: api,      to: orders,   fanout: 0.5, timeoutMs: 5000,  retries: 0 }
+  - { from: cache,    to: db,       fanout: 0.1, timeoutMs: 5000,  retries: 0 }
+  - { from: accounts, to: db,       fanout: 1,   timeoutMs: 5000,  retries: 0 }
+  - { from: orders,   to: db,       fanout: 1,   timeoutMs: 5000,  retries: 0 }
+
+timeline:
+  - at: 240
+    kind: deploy
+    target: filter
+    label: rules update 412
+    modifier: { target: filter, flags: { rules: "412" } }
+  - at: 242
+    kind: modify
+    target: edge
+    label: one rule in update 412 burns the edge CPU
+    modifier:
+      target: edge
+      mul: { costMul: 40 }
+      while:
+        all:
+          - { metric: filter.flag:rules, op: "==", value: "412" }
+          - { metric: filter.enabled, op: "==", value: true }
+  - { at: 300, kind: message, from: boss, lineKey: boss_attack }
+  - at: 420
+    kind: deploy
+    target: orders
+    label: orders 7.3.1 (wording fixes)
+    modifier: { target: orders, flags: { build: "7.3.1" } }
+  - { at: 540, kind: message, from: boss, lineKey: boss_still_down }
+
+actions:
+  - id: filter_off
+    target: filter
+    label: Switch the filter off everywhere
+    verb: switch
+    delayTicks: 20
+    effects:
+      - { target: filter, set: { enabled: false } }
+    resolves: true
+    harmful: false
+    consequenceKey: filter_off_done
+  - id: rollback_rules
+    target: filter
+    label: Roll back the rules update
+    verb: rollback
+    delayTicks: 300
+    effects: []
+    clears: [rules]
+    resolves: true
+    harmful: false
+    consequenceKey: rollback_rules_done
+  - id: restart_edge
+    target: edge
+    label: Restart the edge machines
+    verb: restart
+    delayTicks: 10
+    effects:
+      - { target: edge, mul: { capacityMul: 0.5 }, forTicks: 240 }
+    resolves: false
+    harmful: true
+    consequenceKey: restart_edge_bad
+  - id: block_sources
+    target: gate
+    label: Block the busiest sources at the gate
+    verb: block
+    delayTicks: 10
+    effects:
+      - target: gate
+        flags: { blocked: true }
+        mul: { capacityMul: 0.7 }
+        while: { metric: gate.flag:blocked, op: "==", value: true }
+      - target: edge
+        mul: { costMul: 2 }
+        while: { metric: gate.flag:blocked, op: "==", value: true }
+    resolves: false
+    harmful: true
+    once: true
+    consequenceKey: block_sources_bad
+  - id: unblock_sources
+    target: gate
+    label: Lift the block at the gate
+    verb: block
+    delayTicks: 10
+    effects: []
+    clears: [blocked]
+    resolves: false
+    harmful: false
+    consequenceKey: unblock_sources_done
+  - id: scale_api
+    target: api
+    label: Double the api servers
+    verb: scale
+    delayTicks: 40
+    effects:
+      - { target: api, set: { instances: 8 } }
+    resolves: false
+    harmful: false
+    consequenceKey: scale_api_done
+  - id: rollback_orders
+    target: orders
+    label: Roll back the orders deploy
+    verb: rollback
+    delayTicks: 30
+    effects:
+      - { target: orders, mul: { capacityMul: 0.6 }, forTicks: 120 }
+    clears: [build]
+    resolves: false
+    harmful: true
+    consequenceKey: rollback_orders_bad
+
+win:
+  cond:
+    all:
+      - { metric: city.errorRate, op: "<", value: 0.01 }
+      - { metric: city.tick, op: ">=", value: 250 }
+  holdTicks: 120
+lose:
+  maxFailedRequests: 1100000
+
+clues:
+  - id: cpu_everywhere
+    route: graph:edge.saturation
+    when: { metric: edge.saturation, op: ">", value: 0.95 }
+    weight: 10
+    key: true
+    text: Every edge machine is out of CPU at once, in every part of the city. Nothing else is close to its limit.
+  - id: deploy_before
+    route: changes
+    when: { metric: filter.flag:rules, op: "==", value: "412" }
+    weight: 9
+    key: true
+    text: Rules update 412 went out to the filter two ticks before the edge ran out of CPU. It reached every edge machine in one step.
+  - id: volume_normal
+    route: ask:netops:volume
+    weight: 6
+    text: Traffic volume is normal and comes from the usual places. This does not look like an attack.
+  - id: orders_fine
+    route: graph:orders.errorRate
+    when: { metric: orders.errorRate, op: "<", value: 0.01 }
+    weight: 3
+    text: The orders service is not failing. It sees fewer requests than usual, not more.
+  - id: edge_cpu_report
+    route: ask:netops:cpu
+    weight: 5
+    text: The edge machines are spending their CPU on request checks, not on moving traffic.
+  - id: no_network_change
+    route: ask:netops:network
+    weight: 2
+    text: Nobody changed the network today.
+  - id: rules_today
+    route: ask:devlead:shipped
+    when: { metric: city.tick, op: ">=", value: 240 }
+    weight: 7
+    text: A rules update for the filter went out today. Rules updates reach every edge machine at the same time.
+  - id: orders_change_small
+    route: ask:devlead:orders
+    weight: 2
+    text: The orders deploy only changed some wording, and it went out after the trouble began.
+  - id: db_quiet
+    route: ask:devlead:db
+    weight: 2
+    text: The database is quieter than usual.
+
+updates:
+  - { id: investigating, label: Many visitors are seeing errors. We are looking into it and will post again soon., honest: true }
+  - { id: cause_found, label: We have found the cause in a change to our request filter and are working on a fix., honest: true }
+  - { id: resolved, label: The fix is in place and the city is working normally again. We will share what happened., honest: true }
+  - { id: attack, label: We are under attack from outside and are blocking the attackers., honest: false }
+
+scoring:
+  detectParTicks: 120
+  recoverParTicks: 360
+  updateEveryTicks: 120
+  cleanFixBonusAction: rollback_rules
+
+signals:
+  graphs:
+    gate: [arrivals, errorRate, dropped]
+    edge: [saturation, errorRate, latencyMs, retryArrivals]
+    filter: [saturation]
+    web: [arrivals, errorRate, latencyMs]
+    api: [arrivals, errorRate, latencyMs]
+    cache: [arrivals, saturation]
+    accounts: [arrivals, errorRate]
+    orders: [arrivals, errorRate, saturation]
+    db: [arrivals, saturation]
+  logs:
+    edge:
+      - when: { metric: edge.saturation, op: ">", value: 0.95 }
+        lines:
+          - "WARN worker busy for 4000 ms on a single request check"
+          - "WARN request queue full, turning visitors away"
+          - "INFO upstream services healthy"
+      - when: { metric: edge.saturation, op: "<=", value: 0.95 }
+        lines:
+          - "INFO request checks within budget"
+    gate:
+      - when: { metric: gate.flag:blocked, op: "==", value: true }
+        lines:
+          - "INFO block list active, turning away matching visitors"
+    orders:
+      - when: { metric: orders.saturation, op: ">", value: 0.95 }
+        lines:
+          - "WARN orders backlog growing after restart"
+      - when: { metric: orders.saturation, op: "<=", value: 0.95 }
+        lines:
+          - "INFO orders processing normally"
+
+layout:
+  gate:     { pos: [0, 2], district: edge, kind: gate,     name: Gate }
+  edge:     { pos: [2, 2], district: edge, kind: proxy,    name: Edge }
+  filter:   { pos: [2, 0], district: edge, kind: filter,   name: Filter }
+  web:      { pos: [4, 1], district: app,  kind: service,  name: Web }
+  api:      { pos: [4, 3], district: app,  kind: service,  name: API }
+  cache:    { pos: [6, 0], district: data, kind: cache,    name: Cache }
+  accounts: { pos: [6, 2], district: app,  kind: service,  name: Accounts }
+  orders:   { pos: [6, 4], district: app,  kind: service,  name: Orders }
+  db:       { pos: [8, 2], district: data, kind: database, name: Database }
+
+cast:
+  - id: netops
+    name: Nadia
+    role: teammate
+    persona: Network operator. Short answers, always checked before she says them.
+    knows: [volume_normal, edge_cpu_report, no_network_change]
+    questions:
+      - id: volume
+        label: Is this an attack? How is the traffic?
+        answer: Volume is normal. Same sources as yesterday. No sign of an attack.
+        reveals: volume_normal
+      - id: cpu
+        label: What are the edge machines doing?
+        answer: CPU is pinned. It is all going into request checks, not into moving traffic.
+        reveals: edge_cpu_report
+      - id: network
+        label: Did anything change on the network?
+        answer: No network changes today. I checked.
+        reveals: no_network_change
+  - id: devlead
+    name: Tomas
+    role: teammate
+    persona: Lead developer. Knows what shipped today, talks fast, a little defensive about his own team's deploys.
+    knows: [rules_today, orders_change_small, db_quiet]
+    questions:
+      - id: shipped
+        label: Did anything ship today?
+        answer: The filter team pushed a rules update this afternoon. Those go to every edge machine at the same moment.
+        reveals: rules_today
+      - id: orders
+        label: What was in the orders deploy?
+        answer: Wording fixes on the order page. It went out after things were already broken.
+        reveals: orders_change_small
+      - id: db
+        label: Is the database in trouble?
+        answer: No, it is quieter than normal. Fewer requests are getting that far.
+        reveals: db_quiet
+  - id: boss
+    name: Ruth
+    role: stakeholder
+    persona: Head of the customer team. Needs to tell customers something true, and soon.
+    knows: []
+    questions: []
+
+lines:
+  boss_attack: Ruth - Customers say the whole site is down. Are we being attacked? What do I tell them?
+  boss_still_down: Ruth - It is still down for most people. I need an update I can pass on.
+  filter_off_done: The filter is off on every edge machine. Requests go through unchecked for now.
+  rollback_rules_done: Rules update 412 has been rolled back everywhere. The filter is checking requests with yesterday's rules.
+  restart_edge_bad: Half the edge machines went down to restart and came back still out of CPU. Fewer machines, same problem.
+  block_sources_bad: The gate is turning away a third of visitors, all of them real customers, and the edge now checks every request against the new block list too.
+  unblock_sources_done: The block at the gate is lifted. Visitors are let in again.
+  scale_api_done: The api has twice the servers now. It was not busy before, and it is not busy now.
+  rollback_orders_bad: The orders service restarted to roll back and is running short-handed while it warms up. The wording fixes are gone too.
+
+debrief:
+  happened: >-
+    A new rule for the request filter was pushed to every edge machine in one
+    step. One expression in it took a very long time to check each request, so
+    the edge machines spent all their CPU on checking and could not move
+    traffic. Most visitors got errors for about half an hour.
+  realTeam: >-
+    The real team first suspected an attack, because the symptoms looked like
+    one. Once they saw the timing of the rules deploy, they switched the
+    filtering feature off everywhere, which brought traffic back. They
+    restored the filter after the bad rule was removed. Cloudflare published
+    the full write-up on 2 July 2019.
+  fictionNote: >-
+    The city, its buildings, the people and every number in this case are made
+    up for play. Only the shape of the story follows the real incident.

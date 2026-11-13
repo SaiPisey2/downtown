@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
 import { createRun } from '../sim';
-import { CaseError, cases, parseCase } from './index';
+import { CaseError, buildCases, cases, parseCase } from './index';
 
 const text = readFileSync(new URL('./tutorial.yaml', import.meta.url), 'utf8');
 const PATH = 'tutorial.yaml';
@@ -175,5 +175,32 @@ describe('timeline and numbers', () => {
     const err = failure('id: [unclosed');
     expect(err.path).toBe(PATH);
     expect(err.issues[0]).toContain('YAML');
+  });
+});
+
+describe('review follow-ups', () => {
+  it('names the bad key or value in a malformed condition', () => {
+    const typo = expectFail((d) => (d.win.cond.all[0] = { metric: 'city.errorRate', opp: '<', value: 0.02 }), 'win.cond', 'opp');
+    expect(typo.message).not.toContain('Invalid input');
+    const badOp = expectFail((d) => (d.win.cond.all[0].op = '=~'), 'win.cond', '=~');
+    expect(badOp.message).not.toContain('Invalid input');
+    expectFail((d) => (d.clues[0].when = { not: { all: [{ metric: 'shop.queue', op: '>' }] } }), 'clues.0.when', 'value');
+    expectFail((d) => (d.clues[0].when = { nay: [] }), 'clues.0.when', 'nay');
+  });
+  it('names the whole route when a graph route has no dot', () => {
+    const err = expectFail((d) => d.clues.push({ id: 'g', route: 'graph:shop', weight: 1, text: 'x' }), 'graph:shop', '<node>.<metric>');
+    expect(err.message).not.toContain('unknown node "sho"');
+  });
+  it('rejects non-positive mul values and fractional or zero forTicks', () => {
+    expectFail((d) => (d.timeline[1].modifier.mul.capacityMul = 0), 'timeline.1.modifier.mul.capacityMul');
+    expectFail((d) => (d.timeline[1].modifier.mul.capacityMul = -2), 'capacityMul');
+    expectFail((d) => (d.actions[1].effects[0].forTicks = 2.5), 'actions.1.effects.0.forTicks');
+    expectFail((d) => (d.actions[1].effects[0].forTicks = 0), 'forTicks');
+  });
+});
+
+describe('case registry', () => {
+  it('throws on two case files with the same id', () => {
+    expect(() => buildCases({ 'a.yaml': text, 'b.yaml': text })).toThrow(/duplicate case id "tutorial".*a\.yaml.*b\.yaml/);
   });
 });
