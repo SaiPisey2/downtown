@@ -92,6 +92,29 @@ export interface CaseModel {
   actions: ActionDef[];
   win: { cond: Cond; holdTicks: number };
   lose: { maxFailedRequests: number };
+  clues: ClueDef[];
+  updates: UpdateDef[];
+  scoring: ScoringDef;
+}
+
+export interface ClueDef {
+  id: string;
+  /** 'graph:edge.saturation' | 'log:edge' | 'changes' | 'ask:netops:volume' */
+  route: string;
+  when?: Cond;
+  weight: number;
+  text: string;
+  /** counts as the first key clue for detection scoring */
+  key?: boolean;
+}
+
+export interface UpdateDef { id: string; label: string; honest: boolean }
+
+export interface ScoringDef {
+  detectParTicks: number;
+  recoverParTicks: number;
+  updateEveryTicks: number;
+  cleanFixBonusAction?: string;
 }
 
 export interface Snapshot extends FlowState {
@@ -105,12 +128,24 @@ export interface Snapshot extends FlowState {
   changes: { tick: number; target: NodeId; label: string; byPlayer: boolean }[];
 }
 
+export type RejectReason = 'unknown' | 'already_pending' | 'already_done' | 'not_running';
+
+export type PlayerInput = { tick: number } & (
+  | { kind: 'act'; id: string }
+  | { kind: 'observe'; route: string }
+  | { kind: 'update'; id: string }
+  | { kind: 'hint' }
+);
+
 export type GameEvent = { tick: number } & (
   | { type: 'deploy' | 'fault'; target: NodeId; label: string }
   | { type: 'message'; from: string; lineKey: string }
   | { type: 'action'; actionId: string }
   | { type: 'action_landed'; actionId: string }
-  | { type: 'action_rejected'; actionId: string; reason: 'unknown' | 'already_pending' | 'already_done' | 'not_running' }
+  | { type: 'action_rejected'; actionId: string; reason: RejectReason }
+  | { type: 'clue'; clueId: string }
+  | { type: 'update'; id: string }
+  | { type: 'hint'; clueId: string | null }
   | { type: 'won' }
   | { type: 'lost'; reason: 'clock' | 'impact' }
 );

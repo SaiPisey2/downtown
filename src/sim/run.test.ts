@@ -32,6 +32,9 @@ const model = (over: Partial<CaseModel> = {}): CaseModel => ({
     holdTicks: 5,
   },
   lose: { maxFailedRequests: 1_000_000 },
+  clues: [],
+  updates: [],
+  scoring: { detectParTicks: 20, recoverParTicks: 60, updateEveryTicks: 20 },
   ...over,
 });
 
@@ -74,6 +77,14 @@ describe('run', () => {
     const t = r.snapshot.tick;
     r.step(5);
     expect(r.snapshot.tick).toBe(t);
+  });
+
+  it('loses by impact when failed requests pass the limit', () => {
+    const r = createRun(model({ lose: { maxFailedRequests: 100 } }));
+    r.step(1000);
+    expect(r.snapshot.status).toBe('lost');
+    expect(r.log.at(-1)).toMatchObject({ type: 'lost', reason: 'impact' });
+    expect(r.snapshot.tick).toBeLessThan(400);
   });
 
   it('loses by clock when impact never trips', () => {
@@ -146,6 +157,8 @@ describe('evalCond', () => {
     expect(evalCond({ metric: 'edge.enabled', op: '==', value: true }, s)).toBe(true);
     expect(evalCond({ metric: 'edge.flag:rules', op: '==', value: 'v2' }, s)).toBe(true);
     expect(evalCond({ metric: 'edge.flag:gone', op: '==', value: 'v2' }, s)).toBe(false);
+    expect(evalCond({ metric: 'edge.flag:gone', op: '!=', value: 'v2' }, s)).toBe(true);
+    expect(evalCond({ metric: 'app.flag:rules', op: '!=', value: 'v2' }, s)).toBe(true);
     expect(evalCond({ metric: 'city.tick', op: '==', value: 12 }, s)).toBe(true);
     expect(evalCond({ all: [{ metric: 'city.tick', op: '>=', value: 1 }, { not: { metric: 'city.tick', op: '>', value: 99 } }] }, s)).toBe(true);
     expect(evalCond({ any: [] }, s)).toBe(false);

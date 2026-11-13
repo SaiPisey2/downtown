@@ -1,13 +1,19 @@
 import { evalCond } from './cond';
 import { emptyFlow, stepFlow, topoOrder } from './flow';
-import { makeRng } from './rng';
-import type { CaseModel, GameEvent, Modifier, NodeId, NodeParams, Snapshot } from './types';
+import type { CaseModel, ClueDef, GameEvent, Modifier, NodeId, NodeParams, PlayerInput, RejectReason, Snapshot } from './types';
 
 export interface Run {
+  readonly seed: number;
   readonly snapshot: Snapshot;
   readonly log: readonly GameEvent[];
   step(ticks?: number): Snapshot;
-  act(actionId: string): { ok: true } | { ok: false; reason: string };
+  act(actionId: string): { ok: true } | { ok: false; reason: RejectReason };
+  /** newly found clues for a route; a clue is found only if its `when` holds now */
+  observe(route: string): ClueDef[];
+  update(id: string): void;
+  /** the heaviest undiscovered, not-yet-hinted clue whose `when` holds; null when none */
+  hint(): ClueDef | null;
+  readonly inputs: readonly PlayerInput[];
 }
 
 interface ActiveModifier {
@@ -15,23 +21,19 @@ interface ActiveModifier {
   appliedAt: number;
 }
 
-type EventBody =
-  | { type: 'deploy' | 'fault'; target: NodeId; label: string }
-  | { type: 'message'; from: string; lineKey: string }
-  | { type: 'action'; actionId: string }
-  | { type: 'action_landed'; actionId: string }
-  | { type: 'action_rejected'; actionId: string; reason: 'unknown' | 'already_pending' | 'already_done' | 'not_running' }
-  | { type: 'won' }
-  | { type: 'lost'; reason: 'clock' | 'impact' };
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type EventBody = DistributiveOmit<GameEvent, 'tick'>;
 
 const copyFlags = (f: Snapshot['flags']): Snapshot['flags'] =>
   Object.fromEntries(Object.entries(f).map(([k, v]) => [k, { ...v }]));
 
 export function createRun(model: CaseModel, seed: number = model.seed): Run {
-  makeRng(seed); // created for later tasks; nothing here needs randomness
   const ids = Object.keys(model.nodes);
   const order = topoOrder(ids, model.edges);
   const log: GameEvent[] = [];
+  const inputs: PlayerInput[] = [];
+  const found = new Set<string>();
+  const hinted = new Set<string>();
   const active: ActiveModifier[] = [];
   const done = new Set<string>();
   const pending: { actionId: string; landsAt: number }[] = [];
@@ -52,7 +54,7 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
   };
 
   const emit = (tick: number, e: EventBody): void => {
-    log.push({ tick, ...e } as GameEvent);
+    log.push({ tick, ...e });
   };
 
   const effective = (tick: number, prev: Snapshot): Record<NodeId, NodeParams> => {
@@ -148,15 +150,20 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
     snap = next;
   };
 
+  const eligible = (c: ClueDef): boolean => !c.when || evalCond(c.when, snap);
+
   return {
+    seed,
     get snapshot() { return snap; },
     get log() { return log; },
+    get inputs() { return inputs; },
     step(ticks = 1) {
       for (let i = 0; i < ticks && snap.status === 'running'; i++) tickOnce();
       return snap;
     },
     act(actionId) {
-      const reject = (reason: 'unknown' | 'already_pending' | 'already_done' | 'not_running') => {
+      inputs.push({ tick: snap.tick, kind: 'act', id: actionId });
+      const reject = (reason: RejectReason) => {
         emit(snap.tick, { type: 'action_rejected', actionId, reason });
         return { ok: false as const, reason };
       };
@@ -169,6 +176,33 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
       emit(snap.tick, { type: 'action', actionId });
       snap = { ...snap, pending: pending.map((p) => ({ ...p })) };
       return { ok: true };
+    },
+    observe(route) {
+      if (snap.status !== 'running') return [];
+      inputs.push({ tick: snap.tick, kind: 'observe', route });
+      const fresh = model.clues.filter((c) => c.route === route && !found.has(c.id) && eligible(c));
+      for (const c of fresh) {
+        found.add(c.id);
+        emit(snap.tick, { type: 'clue', clueId: c.id });
+      }
+      return fresh;
+    },
+    update(id) {
+      if (snap.status !== 'running' || !model.updates.some((u) => u.id === id)) return;
+      inputs.push({ tick: snap.tick, kind: 'update', id });
+      emit(snap.tick, { type: 'update', id });
+    },
+    hint() {
+      if (snap.status !== 'running') return null;
+      inputs.push({ tick: snap.tick, kind: 'hint' });
+      let best: ClueDef | null = null;
+      for (const c of model.clues) {
+        if (found.has(c.id) || hinted.has(c.id) || !eligible(c)) continue;
+        if (!best || c.weight > best.weight) best = c;
+      }
+      if (best) hinted.add(best.id);
+      emit(snap.tick, { type: 'hint', clueId: best?.id ?? null });
+      return best;
     },
   };
 }
