@@ -51,7 +51,7 @@ export function Title() {
         <p className="title-line">The city is your production system.</p>
         <p className="title-text">
           Every building is a service and every car is a request. Something is about to go wrong. Look inside the
-          buildings, ask your team what they see, fix it, and keep your boss told as you go. About 15 minutes, no
+          buildings, ask your team what they see, fix it, and keep your boss told as you go. Five to ten minutes, no
           signup, and based on a real outage.
         </p>
         {notice && (

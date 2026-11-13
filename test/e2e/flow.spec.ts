@@ -46,7 +46,7 @@ test('title, tutorial skipped, briefing, a won run, its debrief, and a share lin
   // the title, with the city behind it
   await expect(page.getByRole('heading', { level: 1, name: 'Downtown' })).toBeFocused();
   await expect(page.getByText('The city is your production system.')).toBeVisible();
-  await expect(page.getByText(/about 15 minutes, no\s+signup/i)).toBeVisible();
+  await expect(page.getByText(/five to ten minutes, no\s+signup/i)).toBeVisible();
   await expect(page.getByTestId('board')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 
@@ -104,7 +104,12 @@ test('title, tutorial skipped, briefing, a won run, its debrief, and a share lin
   const source = page.getByRole('link', { name: /Cloudflare/ });
   await expect(source).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(source).toHaveAttribute('target', '_blank');
-  await expect(source).toContainText('2 July 2019');
+  await expect(source).toHaveText('Cloudflare’s write-up of the outage on 2 July 2019');
+  // the fast fix: its penalty is its own line, and the parts visibly add up to the total
+  await expect(page.getByText('Fast fix left a risk open')).toBeVisible();
+  const parts = await page.getByRole('meter').evaluateAll((els) => els.reduce((a, el) => a + Number(el.getAttribute('aria-valuenow')), 0));
+  expect(parts - 8).toBe(total);
+  await expect(page.locator('.part-sum')).toHaveText(new RegExp(`^${parts} from the parts − 8\\s*= ${total}$`));
   await expect(page.getByText(/every number in this case are made\s+up/)).toBeVisible();
   // live characters are off: no reviewer
   await expect(page.getByText(/Reviewer’s comments/)).toHaveCount(0);

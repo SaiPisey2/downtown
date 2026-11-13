@@ -8,7 +8,7 @@ import type { TimelineEntry } from '../../game/timeline';
 import { score as scoreRun } from '../../sim';
 import { clock } from '../logs';
 import { HealthIcon } from '../panels/HealthIcon';
-import { ResultCard, SCORE_PARTS, partLevel, timeLine } from '../panels/ResultCard';
+import { ResultCard, SCORE_PARTS, deductions, partLevel, signed, timeLine } from '../panels/ResultCard';
 import '../theme.css';
 import { clearHash, useScreenHeading } from './heading';
 
@@ -82,6 +82,8 @@ export function Debrief() {
   if (!c || !run || !s) return null;
 
   const won = s.outcome === 'won';
+  const off = deductions(s);
+  const partsSum = SCORE_PARTS.reduce((a, p) => a + s[p.key], 0);
   const { start, brief, showTitle } = useGame.getState();
   const lost = run.log.find((e) => e.type === 'lost');
   const why = won
@@ -123,9 +125,7 @@ export function Debrief() {
               {s.total}
               <span> / 100</span>
             </p>
-            <p className="score-hints">
-              {s.hints === 0 ? 'No hints used' : `${s.hints} hint${s.hints === 1 ? '' : 's'} used (−${3 * s.hints} points)`}
-            </p>
+            {s.hints === 0 && <p className="score-hints">No hints used</p>}
           </div>
           <ul className="parts">
             {SCORE_PARTS.map((p) => {
@@ -153,6 +153,24 @@ export function Debrief() {
                 </li>
               );
             })}
+            {off.map((d) => (
+              <li key={d.name} className="part part-off">
+                <div className="part-head">
+                  <strong>{d.name}</strong>
+                  <span className="num">{signed(d.points)}</span>
+                </div>
+                {d.says && <p className="part-says">{d.says}</p>}
+              </li>
+            ))}
+            {off.length > 0 && (
+              <li className="part part-sum">
+                <span>
+                  {partsSum} from the parts {off.map((d) => `${d.points < 0 ? '−' : '+'} ${Math.abs(d.points)}`).join(' ')}
+                  {partsSum + off.reduce((a, d) => a + d.points, 0) < 0 ? ' (never below 0)' : ''}
+                </span>
+                <strong className="num">= {s.total}</strong>
+              </li>
+            )}
           </ul>
         </section>
 
@@ -183,7 +201,7 @@ export function Debrief() {
             <p className="source">
               Source:{' '}
               <a href={c.source.url} target="_blank" rel="noopener noreferrer">
-                {c.source.publisher}’s write-up, {longDate(c.source.date)}
+                {c.source.publisher}’s write-up of the outage on {longDate(c.source.date)}
               </a>
             </p>
           )}

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { CaseFile } from '../../cases';
 import { MAX_LINK, encodeRun } from '../../game/share';
 import { faultTick } from '../../game/timeline';
+import { HINT_COST } from '../../sim';
 import type { PlayerInput, Score } from '../../sim';
 import { duration } from '../metrics';
 
@@ -17,6 +18,19 @@ export const SCORE_PARTS = [
   { key: 'harm', name: 'No harm done', max: 15, says: 'Avoiding moves that made things worse' },
   { key: 'updates', name: 'Updates', max: 10, says: 'Keeping the boss informed, honestly' },
 ] as const satisfies readonly { key: keyof Score; name: string; max: number; says: string }[];
+
+/** What is taken off the five parts, in plain words: the fast fix that left a risk open, and hints. Empty when nothing is. */
+export function deductions(s: Score): { name: string; points: number; says?: string }[] {
+  const out: { name: string; points: number; says?: string }[] = [];
+  if (s.shortcut < 0) {
+    out.push({ name: 'Fast fix left a risk open', points: s.shortcut, says: 'The city came back, but what caused the trouble is still in place' });
+  }
+  if (s.hints > 0) out.push({ name: `${s.hints} hint${s.hints === 1 ? '' : 's'} used`, points: -HINT_COST * s.hints });
+  return out;
+}
+
+/** A signed whole number with a real minus sign: "−8", "+3", "0". */
+export const signed = (n: number): string => (n < 0 ? `−${-n}` : n > 0 ? `+${n}` : '0');
 
 /** The colour of a part's bar: teal when most of it was earned, amber for some, red for little. */
 export function partLevel(points: number, max: number): 'ok' | 'warn' | 'bad' {
@@ -188,10 +202,12 @@ export function drawCard(canvas: HTMLCanvasElement, c: CaseFile, s: Score): void
   ctx.font = `500 22px ${FONT}`;
   ctx.fillStyle = C.dim;
   ctx.fillText(timeLine(c, s), left, y + 44);
-  if (s.hints > 0) {
+  // what came off the five parts, so they visibly add up to the total
+  const off = deductions(s);
+  if (off.length > 0) {
     ctx.fillStyle = C.faint;
     ctx.font = `500 18px ${FONT}`;
-    ctx.fillText(`${s.hints} hint${s.hints === 1 ? '' : 's'} used`, left, y + 74);
+    ctx.fillText(off.map((d) => `${d.name}: ${signed(d.points)}`).join('  ·  '), left, y + 74);
   }
 
   // the parts

@@ -1,6 +1,6 @@
 # Downtown — the city is your production system
 
-Downtown is a browser game about being on call. A production system is drawn as a small city at night: visitors come in through the gate as streams of light, buildings are services, roads are the calls between them. Something breaks and the city starts to go dark. You look at graphs and logs, ask your teammates, keep your boss told, and pick the fix. A case takes about fifteen minutes. There is no account and no server; the whole game runs in your browser.
+Downtown is a browser game about being on call. A production system is drawn as a small city at night: visitors come in through the gate as streams of light, buildings are services, roads are the calls between them. Something breaks and the city starts to go dark. You look at graphs and logs, ask your teammates, keep your boss told, and pick the fix. A case takes five to ten minutes. There is no account and no server; the whole game runs in your browser.
 
 ## Play
 
@@ -24,7 +24,7 @@ then open the address it prints (http://127.0.0.1:5173).
 
 ## The first case
 
-"The rule that ate the city" retells the public outage write-up Cloudflare published about 2 July 2019: <https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/>. It is told in this project's own words. The city, the people, the numbers and the layout are invented for play; only the shape of the story follows the real incident.
+"The rule that ate the city" retells Cloudflare's public write-up of its outage on 2 July 2019: <https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/>. It is told in this project's own words. The city, the people, the numbers and the layout are invented for play; only the shape of the story follows the real incident.
 
 ## Live characters (optional)
 

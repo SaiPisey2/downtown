@@ -27,7 +27,7 @@ export function Briefing() {
       <Board backdrop insetLeft={TEXT_SPACE} />
       <div className="screen-shade" aria-hidden="true" />
       <main className="title-panel brief-panel" aria-labelledby="brief-h">
-        <p className="eyebrow">{tutorial ? 'Tutorial · about 3 minutes' : 'Your case · about 15 minutes'}</p>
+        <p className="eyebrow">{tutorial ? 'Tutorial · about 3 minutes' : 'Your case · 5 to 10 minutes'}</p>
         <h1 id="brief-h" ref={heading} tabIndex={-1} className="brief-title">
           {c.title}
         </h1>

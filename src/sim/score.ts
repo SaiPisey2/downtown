@@ -15,7 +15,8 @@ export interface Score {
 }
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
-const HINT_COST = 3;
+/** points taken off for each hint that showed a clue */
+export const HINT_COST = 3;
 
 export function score(model: CaseModel, log: readonly GameEvent[], final: Snapshot): Score {
   const { detectParTicks, recoverParTicks, updateEveryTicks } = model.scoring;
