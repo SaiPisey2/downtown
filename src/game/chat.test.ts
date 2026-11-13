@@ -307,6 +307,20 @@ describe('review', () => {
     expect(g().log).toBe(before);
   });
 
+  it('a review asked for and never read does not leave the state streaming', async () => {
+    let calls = 0;
+    reviewing(async function* () {
+      calls++;
+      yield 'x';
+    });
+    g().review();
+    expect(g().reviewState).toBe('idle');
+    expect(calls).toBe(0);
+    // and it can still be read later
+    expect(await drain(g().review())).toEqual(['x']);
+    expect(g().reviewState).toBe('done');
+  });
+
   it('does nothing without a reviewer, or before the run ends, and start() resets it', async () => {
     setCastFactory((k) => scriptedCast(k));
     g().start('edge-rule');

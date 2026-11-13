@@ -1,6 +1,7 @@
 import { cases } from '../cases';
 import type { Run, Snapshot } from '../sim';
-import { offerTick, useGame } from './store';
+import { REPLAY_SPEED } from './flow';
+import { feedReplay, offerTick, useGame } from './store';
 
 const HISTORY = 120;
 const MAX_REAL_MS = 250;
@@ -15,9 +16,9 @@ export function setSpeed(n: number): void {
   speed = n;
 }
 
-/** Simulated ticks per real tick, for animations that keep pace with the simulation. */
+/** Simulated ticks per real tick, for animations that keep pace with the simulation; a replay runs faster. */
 export function getSpeed(): number {
-  return speed;
+  return speed * (useGame.getState().replaying ? REPLAY_SPEED : 1);
 }
 
 function pushHistory(history: Record<string, number[]>, snap: Snapshot): void {
@@ -43,7 +44,7 @@ export function advance(realDtMs: number): void {
   }
   if (s.paused || run.snapshot.status !== 'running') return;
   const tps = tickRate(s.caseId);
-  acc += (Math.min(Math.max(realDtMs, 0), MAX_REAL_MS) / 1000) * tps * speed;
+  acc += (Math.min(Math.max(realDtMs, 0), MAX_REAL_MS) / 1000) * tps * speed * (s.replaying ? REPLAY_SPEED : 1);
 
   let whole = Math.floor(acc + EPS);
   if (whole < 1) {
@@ -56,6 +57,8 @@ export function advance(realDtMs: number): void {
   while (whole > 0 && run.snapshot.status === 'running') {
     prev = run.snapshot;
     run.step(1);
+    // a replay's inputs land at their tick, before anything else sees it
+    if (s.replaying) feedReplay();
     pushHistory(history, run.snapshot);
     offerTick(run);
     whole--;

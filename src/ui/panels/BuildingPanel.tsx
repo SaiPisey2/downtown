@@ -33,7 +33,7 @@ type ObserveOnce = (route: string) => void;
 function Graphs({ c, node, observe }: { c: CaseFile; node: NodeId; observe: ObserveOnce }) {
   const history = useGame((s) => s.history);
   const paused = useGame((s) => s.paused);
-  const running = useGame((s) => s.snap?.status === 'running');
+  const running = useGame((s) => s.snap?.status === 'running' && !s.replaying);
   const metrics = c.signals.graphs[node] ?? [];
 
   useEffect(() => {
@@ -86,7 +86,7 @@ function Changes({ node, observe }: { node: NodeId; observe: ObserveOnce }) {
 function Actions({ c, node }: { c: CaseFile; node: NodeId }) {
   const tick = useGame((s) => s.snap?.tick ?? 0);
   const pending = useGame((s) => s.snap?.pending);
-  const ended = useGame((s) => s.snap?.status !== 'running');
+  const ended = useGame((s) => s.snap?.status !== 'running' || s.replaying);
   const askConfirm = useUi((s) => s.askConfirm);
   const refusals = useUi((s) => s.refusals);
   const actions = c.actions.filter((a) => a.target === node);

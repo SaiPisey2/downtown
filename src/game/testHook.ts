@@ -1,3 +1,4 @@
+import { setAutoDebrief } from './flow';
 import { advance, setSpeed } from './loop';
 import { useGame } from './store';
 import type { GameState } from './store';
@@ -30,6 +31,8 @@ export interface DowntownTestHook {
   state(): GameState;
   setSpeed(n: number): void;
   advance(ms: number): void;
+  /** the debrief opening by itself after the end banner's beat; off under the hook until turned on */
+  setAutoDebrief(on: boolean): void;
   camera(): { position: Vec3; target: Vec3 };
   canvasColors(): number;
   sceneStats(): SceneStats;
@@ -62,6 +65,7 @@ export function installTestHook(): void {
     state: () => useGame.getState(),
     setSpeed,
     advance,
+    setAutoDebrief,
     camera: () => needProbe().camera(),
     canvasColors: () => needProbe().canvasColors(),
     sceneStats: () => needProbe().sceneStats(),

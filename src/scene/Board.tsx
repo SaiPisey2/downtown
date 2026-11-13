@@ -242,8 +242,9 @@ function ViewInset({ left, right }: { left: number; right: number }) {
 /** Pointer travel since the last press, in CSS pixels; past this a press is a drag, not a click. */
 const CLICK_SLOP = 5;
 
-function Scene({ c, onAccent, labels, wasDrag, inset }: {
+function Scene({ c, onAccent, labels, wasDrag, inset, backdrop }: {
   c: CaseFile;
+  backdrop: boolean;
   onAccent?: BoardProps['onAccent'];
   inset: { left: number; right: number };
   labels: RefObject<HTMLDivElement | null>;
@@ -308,7 +309,7 @@ function Scene({ c, onAccent, labels, wasDrag, inset }: {
       ))}
       <Traffic c={c} />
       <Effects c={c} parts={parts} />
-      <CameraRig layout={c.layout} />
+      <CameraRig layout={c.layout} drift={backdrop} />
       <ViewInset left={inset.left} right={inset.right} />
       {typeof window !== 'undefined' && window.__downtown && <Probe layout={c.layout} />}
     </>
@@ -321,10 +322,12 @@ export interface BoardProps {
   /** CSS pixels covered by docks at each side; the city is centred in what is left */
   insetLeft?: number;
   insetRight?: number;
+  /** behind a menu: slowly orbiting, nothing can be picked, focused or read out */
+  backdrop?: boolean;
 }
 
 /** The 3D city for the current case: a function of the store, nothing else. */
-export function Board({ onAccent, insetLeft = 0, insetRight = 0 }: BoardProps) {
+export function Board({ onAccent, insetLeft = 0, insetRight = 0, backdrop = false }: BoardProps) {
   const caseId = useGame((s) => s.caseId);
   const c = caseId ? cases[caseId] : undefined;
   const home = useMemo(() => (c ? homeView(c.layout) : null), [c]);
@@ -343,7 +346,9 @@ export function Board({ onAccent, insetLeft = 0, insetRight = 0 }: BoardProps) {
   return (
     <div
       data-testid="board"
-      style={{ position: 'absolute', inset: 0, background: BACKGROUND }}
+      inert={backdrop}
+      aria-hidden={backdrop || undefined}
+      style={{ position: 'absolute', inset: 0, background: BACKGROUND, pointerEvents: backdrop ? 'none' : undefined, isolation: backdrop ? 'isolate' : undefined }}
       onPointerDownCapture={(e) => {
         press.current = { x: e.clientX, y: e.clientY, travel: 0 };
       }}
@@ -362,7 +367,7 @@ export function Board({ onAccent, insetLeft = 0, insetRight = 0 }: BoardProps) {
         gl={{ antialias: true, alpha: true }}
         camera={{ fov: CAMERA.fov, near: 0.5, far: 250, position: home.position }}
       >
-        <Scene c={c} onAccent={onAccent} labels={labels} wasDrag={wasDrag} inset={{ left: insetLeft, right: insetRight }} />
+        <Scene c={c} onAccent={onAccent} labels={labels} wasDrag={wasDrag} inset={{ left: insetLeft, right: insetRight }} backdrop={backdrop} />
       </Canvas>
       {/* labels live outside the canvas's event target, so clicking one never picks the building behind it */}
       <div ref={labels} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }} />

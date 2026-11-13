@@ -102,9 +102,17 @@ export function baseUrlProblem(url: string): string | null {
   } catch {
     return 'That is not a web address. It should look like https://example.com/v1.';
   }
+  if (u.username || u.password) return 'Take the name and password out of the address; the key is sent separately.';
   if (u.protocol === 'https:') return null;
   if (u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost')) return null;
   return 'Use an https:// address, or http://127.0.0.1 or http://localhost for a model on this computer.';
+}
+
+/** The host the key goes to with these settings, or null while the base URL cannot be used. */
+export function keyHost(s: Pick<LiveSettings, 'provider' | 'baseUrl'>): string | null {
+  if (s.provider === 'anthropic') return 'api.anthropic.com';
+  if (baseUrlProblem(s.baseUrl) !== null) return null;
+  return s.baseUrl.trim() === '' ? 'api.openai.com' : new URL(s.baseUrl.trim()).host;
 }
 
 let memo: { from: LiveSettings | null; out: AISettings | null } = { from: null, out: null };

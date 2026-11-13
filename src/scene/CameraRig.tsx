@@ -5,6 +5,7 @@ import { Spherical, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { CaseFile } from '../cases';
 import { useGame } from '../game/store';
+import { calmMotion } from './live';
 import { CAMERA, boardBounds, clampTarget, homeView, stepOrbit, worldPos } from './mapping';
 
 /** Per-second rate of the exponential ease toward a goal. */
@@ -58,7 +59,7 @@ function boardHasFocus(el: EventTarget | null): boolean {
  * of held keys. Everything runs on refs inside
  * useFrame, so camera motion never re-renders React.
  */
-export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
+export function CameraRig({ layout, drift = false }: { layout: CaseFile['layout']; /** a slow orbit nobody steers, behind a menu */ drift?: boolean }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const camera = useThree((s) => s.camera);
   const goal = useRef<Goal | null>(null);
@@ -103,6 +104,7 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
   );
 
   useEffect(() => {
+    if (drift) return;
     const onDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || !boardHasFocus(e.target)) return;
       shift.current = e.shiftKey;
@@ -133,7 +135,7 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('blur', release);
     };
-  }, [home]);
+  }, [home, drift]);
 
   /**
    * Moves the camera for the keys held this frame. Every press counts as held
@@ -215,6 +217,11 @@ export function CameraRig({ layout }: { layout: CaseFile['layout'] }) {
       minDistance={CAMERA.minDistance}
       maxDistance={CAMERA.maxDistance}
       screenSpacePanning={false}
+      enableRotate={!drift}
+      enableZoom={!drift}
+      enablePan={!drift}
+      autoRotate={drift && !calmMotion()}
+      autoRotateSpeed={0.3}
     />
   );
 }

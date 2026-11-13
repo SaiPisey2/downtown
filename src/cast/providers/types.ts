@@ -34,7 +34,7 @@ function thrown(err: unknown, signal: AbortSignal): ProviderError {
   return signal.aborted ? new ProviderError('timeout', 'the request was stopped') : new ProviderError('network', String(err));
 }
 
-/** Posts JSON and returns the response body, or throws a ProviderError. Never sends cookies. */
+/** Posts JSON and returns the response body, or throws a ProviderError. Never sends cookies, never follows a redirect. */
 export async function postForStream(
   fetchImpl: typeof fetch,
   url: string,
@@ -44,7 +44,7 @@ export async function postForStream(
 ): Promise<ReadableStream<Uint8Array>> {
   let res: Response;
   try {
-    res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal, credentials: 'omit' });
+    res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal, credentials: 'omit', redirect: 'error' });
   } catch (err) {
     throw thrown(err, signal);
   }

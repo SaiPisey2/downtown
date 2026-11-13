@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { cases } from '../../cases';
+import { DEBRIEF_BEAT_MS, autoDebriefOn } from '../../game/flow';
 import { useGame } from '../../game/store';
 import { Board } from '../../scene/Board';
 import { ActionConfirm, trapTab } from '../panels/ActionConfirm';
@@ -68,6 +69,50 @@ function useEventToasts(): void {
   }, []);
 }
 
+/** After a beat on the end banner, the debrief opens by itself. */
+function useDebriefAfterBeat(): void {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (s: ReturnType<typeof useGame.getState>) => {
+      if (timer !== undefined || !s.snap || s.snap.status === 'running' || !autoDebriefOn()) return;
+      const run = s.run;
+      timer = setTimeout(() => {
+        const now = useGame.getState();
+        if (now.run === run && now.screen === 'play') now.finish();
+      }, DEBRIEF_BEAT_MS);
+    };
+    arm(useGame.getState());
+    const off = useGame.subscribe(arm);
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, []);
+}
+
+/** Across the bottom while a shared run plays back: nothing can be changed, only watched or skipped. */
+function ReplayBanner() {
+  const replaying = useGame((s) => s.replaying);
+  const running = useGame((s) => s.snap?.status === 'running');
+  if (!replaying) return null;
+  return (
+    <div className="replay-row">
+      <div className="replay" role="status">
+        <span className="replay-dot" aria-hidden="true" />
+        <span>
+          <strong>Watching a replay</strong>
+          <span className="replay-note">at 8× speed · controls are off</span>
+        </span>
+        {running && (
+          <button type="button" className="btn" onClick={() => useGame.getState().skipReplay()}>
+            Skip to result
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Shown when the game paused itself because the tab was hidden. */
 function AwayNotice() {
   const away = useGame((s) => s.pauseReason === 'hidden');
@@ -108,6 +153,7 @@ export function Play() {
   const dock = useRef<HTMLDivElement>(null);
   const chatSlot = useRef<HTMLDivElement>(null);
   useEventToasts();
+  useDebriefAfterBeat();
 
   // picking a building replaces a city-wide view in the dock
   useEffect(
@@ -180,6 +226,7 @@ export function Play() {
       {/* after the dock in the DOM: Tab goes HUD, dock, then the building labels */}
       <Board insetLeft={chatOpen ? CHAT_SPACE : 0} insetRight={overlay || selected ? DOCK_SPACE : 0} />
       <EndBanner />
+      <ReplayBanner />
       <Toasts />
       <ActionConfirm />
       <AwayNotice />

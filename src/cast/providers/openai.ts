@@ -14,6 +14,20 @@ interface Chunk {
  */
 export function openai(baseUrl: string = OPENAI_BASE): ChatProvider {
   const base = baseUrl.replace(/\/+$/, '');
+  /** the request URL, built from the parsed base: never a name or password in it, nothing after the path */
+  const endpoint = (): string => {
+    let u: URL;
+    try {
+      u = new URL(base);
+    } catch {
+      throw new ProviderError('other', 'the base URL is not a web address');
+    }
+    if (u.username || u.password) throw new ProviderError('other', 'the base URL holds a name or password');
+    u.pathname = `${u.pathname.replace(/\/+$/, '')}/chat/completions`;
+    u.search = '';
+    u.hash = '';
+    return u.href;
+  };
   // OpenAI's own endpoint wants the newer limit field; other servers mostly know only the older one
   const limitField = base === OPENAI_BASE ? 'max_completion_tokens' : 'max_tokens';
   return {
@@ -21,7 +35,7 @@ export function openai(baseUrl: string = OPENAI_BASE): ChatProvider {
     async *stream(req, key, signal, fetchImpl = (...a) => fetch(...a)) {
       const body = await postForStream(
         fetchImpl,
-        `${base}/chat/completions`,
+        endpoint(),
         { 'content-type': 'application/json', authorization: `Bearer ${key}` },
         {
           model: req.model,

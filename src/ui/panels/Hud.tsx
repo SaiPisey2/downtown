@@ -37,6 +37,7 @@ export function Hud() {
   const caseId = useGame((s) => s.caseId);
   const snap = useGame((s) => s.snap);
   const paused = useGame((s) => s.paused);
+  const replaying = useGame((s) => s.replaying);
   const found = useGame((s) => s.found.length);
   const { setPaused, hint, goHome } = useGame.getState();
   const overlay = useUi((s) => s.overlay);
@@ -48,7 +49,7 @@ export function Hud() {
   const live = useLiveSettings((s) => activeAiSettings(s) !== null);
   const c = caseId ? cases[caseId] : undefined;
   if (!c || !snap) return null;
-  const ended = snap.status !== 'running';
+  const ended = snap.status !== 'running' || replaying;
 
   const askHint = () => {
     hint();
@@ -167,7 +168,7 @@ export function Hud() {
   );
 }
 
-function GearIcon() {
+export function GearIcon() {
   return (
     <svg className="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
       <path
@@ -198,7 +199,7 @@ function PlayIcon() {
   );
 }
 
-/** The outcome, once the run has ended. The full debrief comes later. */
+/** The outcome, once the run has ended, with the way on to the debrief (which also opens by itself after a beat). */
 export function EndBanner() {
   const snap = useGame((s) => s.snap);
   const lost = useGame((s) => s.log.find((e) => e.type === 'lost'));
@@ -216,6 +217,9 @@ export function EndBanner() {
           <strong>{won ? 'Recovered' : 'Lost'}</strong>
           <span>{why}</span>
         </div>
+        <button type="button" className="btn btn-primary end-go" onClick={() => useGame.getState().finish()}>
+          See debrief
+        </button>
       </div>
     </div>
   );

@@ -34,6 +34,8 @@ const REVIEW_FIRST_TOKEN_MS = 30_000;
 const REVIEW_TOTAL_MS = 90_000;
 /** Longest reply shown, in characters. */
 const MAX_REPLY = 600;
+/** Longest review shown, in characters: the reviewer writes two judgements, not a chat line. */
+export const MAX_REVIEW = 1_500;
 const REVIEW_KEY = '#review';
 
 /** Thrown inside the stream when a request was stopped on purpose (a newer question, the run ended). */
@@ -60,7 +62,7 @@ export function aiCast(
   const inflight = new Map<string, AbortController>();
 
   /** Streams one request under the two timeouts, yielding cleaned text as it grows. */
-  async function* timed(slot: string, req: ChatRequest, firstMs: number, totalMs: number): AsyncGenerator<string> {
+  async function* timed(slot: string, req: ChatRequest, firstMs: number, totalMs: number, maxLen = MAX_REPLY): AsyncGenerator<string> {
     inflight.get(slot)?.abort();
     const ctrl = new AbortController();
     inflight.set(slot, ctrl);
@@ -79,12 +81,12 @@ export function aiCast(
           if (ctrl.signal.aborted) break;
           clearTimeout(first);
           raw += chunk;
-          const clean = cleanText(raw, MAX_REPLY);
+          const clean = cleanText(raw, maxLen);
           if (clean.length > shown) {
             yield clean.slice(shown);
             shown = clean.length;
           }
-          if (clean.length >= MAX_REPLY) break;
+          if (clean.length >= maxLen) break;
         }
       } catch (err) {
         if (!ctrl.signal.aborted) throw err;
@@ -140,7 +142,7 @@ export function aiCast(
       const s = score(c, ctx.log, ctx.final);
       const req = { ...reviewPrompt(c, ctx.log, s, ctx.chat), model: settings.reviewModel };
       try {
-        yield* timed(REVIEW_KEY, req, REVIEW_FIRST_TOKEN_MS, REVIEW_TOTAL_MS);
+        yield* timed(REVIEW_KEY, req, REVIEW_FIRST_TOKEN_MS, REVIEW_TOTAL_MS, MAX_REVIEW);
       } catch (err) {
         if (!(err instanceof Cancelled)) throw err;
       }

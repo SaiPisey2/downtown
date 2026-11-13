@@ -64,6 +64,7 @@ describe('anthropic adapter', () => {
       stream: true,
     });
     expect(init.credentials).toBe('omit');
+    expect(init.redirect).toBe('error');
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 

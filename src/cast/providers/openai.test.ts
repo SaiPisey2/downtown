@@ -55,6 +55,7 @@ describe('openai-compatible adapter', () => {
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer sk-test' });
     expect(init.credentials).toBe('omit');
+    expect(init.redirect).toBe('error');
     expect(JSON.parse(String(init.body))).toEqual({
       model: 'my-model',
       messages: [{ role: 'system', content: 'Stay in role.' }, ...req.messages],
@@ -70,6 +71,15 @@ describe('openai-compatible adapter', () => {
     const body = JSON.parse(String(calls[0]!.init.body));
     expect(body.max_tokens).toBe(300);
     expect(body.max_completion_tokens).toBeUndefined();
+  });
+
+  it('builds the request URL from the parsed base: no query or fragment, and never a name or password', async () => {
+    const { fetch, calls } = fakeFetch(() => new Response(streamOf([CANNED])));
+    await collect(openai('https://api.example.com/v1?x=1#frag').stream(req, 'k', new AbortController().signal, fetch));
+    expect(calls[0]!.url).toBe('https://api.example.com/v1/chat/completions');
+    const leak = fakeFetch(() => new Response(streamOf([CANNED])));
+    expect(await kindOf(collect(openai('https://user:pw@evil.example/v1').stream(req, 'k', new AbortController().signal, leak.fetch)))).toBe('other');
+    expect(leak.calls).toHaveLength(0);
   });
 
   it('yields the content deltas and stops at [DONE], whatever size the pieces are', async () => {

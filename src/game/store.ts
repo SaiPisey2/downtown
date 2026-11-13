@@ -1,13 +1,26 @@
 import { create } from 'zustand';
 import { answerFor, cases } from '../cases';
-import { cleanText, makeCast } from '../cast';
+import { cleanText, makeCast, scriptedCast } from '../cast';
 import type { Cast, CastHooks, ChatLine } from '../cast';
 import { createRun } from '../sim';
-import type { GameEvent, NodeId, Run, Snapshot } from '../sim';
+import type { GameEvent, NodeId, PlayerInput, Run, Snapshot } from '../sim';
+import { MAIN_CASE, TUTORIAL_CASE, markTutorialDone } from './flow';
+import { sharedInputs } from './share';
+import type { SharedRun } from './share';
+
+/** A plain-words message on the title screen, after a replay link could not be used. */
+export interface TitleNotice {
+  text: string;
+  /** offered as "Play it fresh" when the link was for an older version of a case we have */
+  fresh?: string;
+}
 
 export interface GameState {
   screen: 'title' | 'briefing' | 'play' | 'debrief';
   caseId: string | null;
+  /** the run on screen is a shared run being rebuilt; every player control is off */
+  replaying: boolean;
+  notice: TitleNotice | null;
   run: Run | null;
   prev: Snapshot | null;
   snap: Snapshot | null;
@@ -34,7 +47,15 @@ export interface GameState {
   /** the reviewer's comments on the finished run, as they arrive; never part of the score */
   reviewText: string;
   reviewState: 'idle' | 'streaming' | 'done' | 'failed';
+  /** The title screen, with the main case running healthy behind it. */
+  showTitle(notice?: TitleNotice): void;
+  /** The briefing for a case, with that case running healthy behind it. */
+  brief(caseId: string): void;
   start(caseId: string, seed?: number): void;
+  /** Rebuilds a shared run on the play screen at replay speed, with scripted lines only. */
+  watch(run: SharedRun): void;
+  /** Runs a replay to its end at once and opens its debrief. */
+  skipReplay(): void;
   act(id: string): void;
   observe(route: string): void;
   update(id: string): void;
@@ -74,6 +95,92 @@ let replies: Promise<void> = Promise.resolve();
 let nextLineId = 1;
 /** the line now being written by each character; an older answer still arriving stops when it is replaced */
 const writing = new Map<string, number>();
+
+/** Inputs of the replay still to be fed, oldest first. */
+let replayQueue: PlayerInput[] = [];
+
+/** Ticks of healthy running shown behind the title and the briefing, always before the first trouble. */
+const PREVIEW_TICKS = 20;
+
+/** A run of the case a few ticks in, before anything goes wrong: the city as it looks on a quiet day. */
+function healthy(caseId: string): Snapshot {
+  const c = cases[caseId];
+  if (!c) throw new Error(`unknown case "${caseId}"`);
+  const firstTrouble = Math.min(...c.timeline.filter((e) => e.kind !== 'message').map((e) => e.at), c.maxTicks);
+  const run = createRun(c, c.seed);
+  run.step(Math.max(1, Math.min(PREVIEW_TICKS, firstTrouble - 2)));
+  return run.snapshot;
+}
+
+/** Everything a run leaves in the store, cleared. */
+const NO_RUN = {
+  run: null,
+  prev: null,
+  alpha: 0,
+  paused: false,
+  pauseReason: null,
+  selected: null,
+  history: {},
+  log: [],
+  found: [],
+  lastAction: null,
+  lastHint: null,
+  chat: [],
+  reviewText: '',
+  reviewState: 'idle',
+  replaying: false,
+} satisfies Partial<GameState>;
+
+function dropCast(): void {
+  cast?.stop?.();
+  cast = null;
+  replayQueue = [];
+}
+
+/**
+ * Applies the replay's inputs that are due at the run's current tick, as
+ * replay() does: an input is applied once the run has reached its tick, and
+ * inputs after the end of the run are dropped. Called by the loop after every
+ * tick of a replay. Each input goes straight to the run, so nothing the viewer
+ * does can add to it; the player's own lines are shown as they were said.
+ */
+export function feedReplay(): void {
+  const s = useGame.getState();
+  const run = s.run;
+  const c = s.caseId ? cases[s.caseId] : undefined;
+  if (!s.replaying || !run || !c) return;
+  let fed = false;
+  while (replayQueue.length > 0 && replayQueue[0]!.tick <= run.snapshot.tick) {
+    const input = replayQueue.shift()!;
+    fed = true;
+    const tick = run.snapshot.tick;
+    switch (input.kind) {
+      case 'act': run.act(input.id); break;
+      case 'hint': run.hint(); break;
+      case 'update': {
+        const u = c.updates.find((x) => x.id === input.id);
+        const boss = c.cast.find((m) => m.role === 'stakeholder');
+        if (u && run.snapshot.status === 'running') addLine({ tick, from: 'you', ...(boss ? { to: boss.id } : {}), text: u.label });
+        run.update(input.id);
+        break;
+      }
+      case 'observe': {
+        // a question asked in the chat: show it and its written answer
+        const [ask, castId = '', qId = ''] = input.route.split(':');
+        const member = ask === 'ask' ? c.cast.find((m) => m.id === castId) : undefined;
+        const q = member?.questions.find((x) => x.id === qId);
+        if (member && q && run.snapshot.status === 'running') {
+          addLine({ tick, from: 'you', to: member.id, text: q.label });
+          addLine({ tick, from: member.id, text: answerFor(c, member.id, q.id, run.snapshot) });
+        }
+        run.observe(input.route);
+        break;
+      }
+    }
+  }
+  if (run.snapshot.status !== 'running') replayQueue = [];
+  if (fed) useGame.setState(view(run));
+}
 
 /** Longest free-text line the player can send. */
 export const MAX_SAY = 300;
@@ -129,6 +236,8 @@ export function offerTick(run: Run): void {
 export const useGame = create<GameState>()((set, get) => ({
   screen: 'title',
   caseId: null,
+  replaying: false,
+  notice: null,
   run: null,
   prev: null,
   snap: null,
@@ -148,11 +257,47 @@ export const useGame = create<GameState>()((set, get) => ({
   reviewText: '',
   reviewState: 'idle',
 
+  showTitle(notice) {
+    dropCast();
+    const snap = healthy(MAIN_CASE);
+    set({ ...NO_RUN, screen: 'title', caseId: MAIN_CASE, snap, notice: notice ?? null });
+  },
+  brief(caseId) {
+    dropCast();
+    const snap = healthy(caseId);
+    set({ ...NO_RUN, screen: 'briefing', caseId, snap, notice: null });
+  },
+  watch(shared) {
+    const c = cases[shared.c];
+    if (!c) throw new Error(`unknown case "${shared.c}"`);
+    dropCast();
+    const run = createRun(c, shared.s);
+    // scripted lines only: a replay never reaches the live cast or any provider
+    cast = scriptedCast(c);
+    offered = 0;
+    replies = Promise.resolve();
+    writing.clear();
+    set({ ...NO_RUN, screen: 'play', caseId: c.id, run, notice: null, replaying: true, ...view(run) });
+    replayQueue = sharedInputs(shared);
+    feedReplay();
+  },
+  skipReplay() {
+    const s = get();
+    const run = s.run;
+    if (!s.replaying || !run) return;
+    feedReplay();
+    while (run.snapshot.status === 'running') {
+      run.step(1);
+      feedReplay();
+    }
+    set({ ...view(run), prev: null, screen: 'debrief' });
+  },
   start(caseId, seed) {
     const c = cases[caseId];
     if (!c) throw new Error(`unknown case "${caseId}"`);
     const run = createRun(c, seed ?? c.seed);
     cast?.stop?.();
+    replayQueue = [];
     let made: Cast | null = null;
     made = makeCast(c, hooksFor(() => made));
     cast = made;
@@ -162,6 +307,8 @@ export const useGame = create<GameState>()((set, get) => ({
     set({
       screen: 'play',
       caseId,
+      replaying: false,
+      notice: null,
       run,
       prev: null,
       alpha: 0,
@@ -179,13 +326,13 @@ export const useGame = create<GameState>()((set, get) => ({
   },
   act(id) {
     const run = get().run;
-    if (!run) return;
+    if (!run || get().replaying) return;
     const r = run.act(id);
     set({ lastAction: r.ok ? { id, ok: true } : { id, ok: false, reason: r.reason }, ...view(run) });
   },
   observe(route) {
     const run = get().run;
-    if (!run) return;
+    if (!run || get().replaying) return;
     run.observe(route);
     set(view(run));
   },
@@ -194,14 +341,14 @@ export const useGame = create<GameState>()((set, get) => ({
     const run = s.run;
     const c = s.caseId ? cases[s.caseId] : undefined;
     const u = c?.updates.find((x) => x.id === id);
-    if (!run || !c || !u || run.snapshot.status !== 'running') return;
+    if (!run || !c || !u || run.snapshot.status !== 'running' || s.replaying) return;
     s.say(u.label, c.cast.find((m) => m.role === 'stakeholder')?.id);
     run.update(id);
     set(view(run));
   },
   hint() {
     const run = get().run;
-    if (!run) return;
+    if (!run || get().replaying) return;
     const c = run.hint();
     set({ lastHint: { clueId: c?.id ?? null, text: c?.text ?? null }, ...view(run) });
   },
@@ -211,7 +358,7 @@ export const useGame = create<GameState>()((set, get) => ({
     const me = cast;
     const c = s.caseId ? cases[s.caseId] : undefined;
     const member = c?.cast.find((m) => m.id === castId);
-    if (!run || !me || !c || !member || run.snapshot.status !== 'running') return;
+    if (!run || !me || !c || !member || run.snapshot.status !== 'running' || s.replaying) return;
     const q = questionId === null ? undefined : member.questions.find((x) => x.id === questionId);
     if (questionId !== null && !q) return;
     const said = q ? q.label : cleanText((freeText ?? '').trim(), MAX_SAY).trim();
@@ -255,16 +402,19 @@ export const useGame = create<GameState>()((set, get) => ({
     const s = get();
     const run = s.run;
     const c = s.caseId ? cases[s.caseId] : undefined;
-    if (!me?.review || !run || !c || run.snapshot.status === 'running' || s.reviewState !== 'idle') {
+    const review = me?.review;
+    if (!me || !review || !run || !c || s.replaying || run.snapshot.status === 'running' || s.reviewState !== 'idle') {
       return (async function* () {})();
     }
-    const stream = me.review({ c, final: run.snapshot, log: [...run.log], chat: s.chat });
-    set({ reviewState: 'streaming', reviewText: '' });
+    const ctx = { c, final: run.snapshot, log: [...run.log], chat: s.chat };
     return (async function* () {
+      // the state changes only once someone reads: a review asked for and never read stays idle
+      if (cast !== me || get().reviewState !== 'idle') return;
+      set({ reviewState: 'streaming', reviewText: '' });
       let text = '';
       let failed = false;
       try {
-        for await (const chunk of stream) {
+        for await (const chunk of review(ctx)) {
           if (cast !== me) return;
           text += chunk;
           set({ reviewText: text });
@@ -279,6 +429,7 @@ export const useGame = create<GameState>()((set, get) => ({
     })();
   },
   say(text, to) {
+    if (get().replaying) return;
     const tick = get().snap?.tick ?? 0;
     addLine(to === undefined ? { tick, from: 'you', text } : { tick, from: 'you', to, text });
   },
@@ -295,6 +446,7 @@ export const useGame = create<GameState>()((set, get) => ({
     set({ reducedMotion: on });
   },
   finish() {
+    if (get().caseId === TUTORIAL_CASE) markTutorialDone();
     set({ screen: 'debrief' });
   },
 }));

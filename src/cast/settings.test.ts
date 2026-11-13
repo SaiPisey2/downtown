@@ -71,6 +71,22 @@ describe('live settings', () => {
     expect(baseUrlProblem('not a url')).toMatch(/web address/);
   });
 
+  it('a base URL with a name or password in it is refused in plain words', async () => {
+    const { baseUrlProblem } = await fresh();
+    expect(baseUrlProblem('https://user@evil.example/v1')).toMatch(/name and password/);
+    expect(baseUrlProblem('https://user:pw@api.example.com/v1')).toMatch(/name and password/);
+    expect(baseUrlProblem('http://a@127.0.0.1/v1')).toMatch(/name and password/);
+  });
+
+  it('names the host the key will be sent to, for both providers', async () => {
+    const { keyHost } = await fresh();
+    expect(keyHost({ provider: 'anthropic', baseUrl: '' })).toBe('api.anthropic.com');
+    expect(keyHost({ provider: 'openai', baseUrl: '' })).toBe('api.openai.com');
+    expect(keyHost({ provider: 'openai', baseUrl: 'http://127.0.0.1:11434/v1' })).toBe('127.0.0.1:11434');
+    expect(keyHost({ provider: 'openai', baseUrl: 'https://user@evil.example/v1' })).toBeNull();
+    expect(keyHost({ provider: 'openai', baseUrl: 'nope' })).toBeNull();
+  });
+
   it('the key reaches the tab only while "keep for this tab" is on, and comes back after a reload', async () => {
     const tab = sessionStorage;
     const first = await fresh();

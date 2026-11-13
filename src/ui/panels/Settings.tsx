@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { activeAiSettings, baseUrlProblem, useLiveSettings } from '../../cast/settings';
+import { activeAiSettings, baseUrlProblem, keyHost, useLiveSettings } from '../../cast/settings';
 import type { LiveSettings } from '../../cast/settings';
 import { CloseButton } from './ChangeLog';
 
@@ -37,6 +37,7 @@ export function Settings({ onClose }: { onClose(): void }) {
   const on = useLiveSettings((x) => activeAiSettings(x) !== null);
   const hasKey = s.key.trim() !== '';
   const urlProblem = s.provider === 'openai' ? baseUrlProblem(s.baseUrl) : null;
+  const host = keyHost(s);
   const missing =
     !hasKey ? 'Add a key to switch them on.'
     : urlProblem ? 'Fix the base URL to switch them on.'
@@ -92,10 +93,11 @@ export function Settings({ onClose }: { onClose(): void }) {
           </Field>
         )}
 
-        <Field label="Your key">
-          {(id) => (
+        <Field label="Your key" hint={host ? `Your key will be sent to ${host}` : 'Fix the base URL to see where your key will be sent.'}>
+          {(id, note) => (
             <input
               id={id}
+              aria-describedby={note}
               type="password"
               autoComplete="off"
               spellCheck={false}

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cases } from '../cases';
 import { createRun, score } from '../sim';
-import { aiCast, FAILURE_WORDS } from './ai';
+import { aiCast, FAILURE_WORDS, MAX_REVIEW } from './ai';
 import type { AISettings } from './ai';
 import { ProviderError } from './providers/types';
 import type { ChatProvider, ChatRequest } from './providers/types';
@@ -216,5 +216,19 @@ describe('aiCast', () => {
     expect(p.reqs[0]!.model).toBe('review-model');
     expect(JSON.stringify(p.reqs[0])).toContain(String(score(c, run.log, run.snapshot).total));
     await expect(collect(aiCast(c, settings, scriptedCast(c), fails('rate')).review!(ctx))).rejects.toBeInstanceOf(ProviderError);
+  });
+
+  it('the review has its own cap of 1,500 characters; a chat reply stays at 600', async () => {
+    const run = createRun(c);
+    run.step(250);
+    run.act('rollback_rules');
+    run.step(900);
+    const ctx = { c, final: run.snapshot, log: run.log, chat: [] };
+    const long = 'word '.repeat(500);
+    const review = (await collect(aiCast(c, settings, scriptedCast(c), says(long)).review!(ctx))).join('');
+    expect(review).toHaveLength(MAX_REVIEW);
+    expect(MAX_REVIEW).toBe(1_500);
+    const reply = (await collect(aiCast(c, settings, scriptedCast(c), says(long)).ask('netops', null, 'hi', ctxAt(300)))).join('');
+    expect(reply).toHaveLength(600);
   });
 });

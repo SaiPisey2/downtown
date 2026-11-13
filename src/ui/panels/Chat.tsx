@@ -210,7 +210,7 @@ function FreeText({ m, ended }: { m: Member; ended: boolean }) {
 export function ChatDock({ onClose }: { onClose(): void }) {
   const caseId = useGame((s) => s.caseId);
   const chat = useGame((s) => s.chat);
-  const ended = useGame((s) => s.snap?.status !== 'running');
+  const ended = useGame((s) => s.snap?.status !== 'running' || s.replaying);
   const chatWith = useUi((s) => s.chatWith);
   const unread = useUi((s) => s.unread);
   const chatTo = useUi((s) => s.chatTo);
