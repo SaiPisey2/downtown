@@ -83,6 +83,21 @@ describe('edge-rule case', () => {
     expect(b.score.recover).toBeLessThan(a.score.recover);
   });
 
+  it('an action before anything is wrong is refused, and the run goes on to the fault', () => {
+    const run = createRun(c);
+    run.step(10);
+    expect(run.act('filter_off')).toEqual({ ok: false, reason: 'too_early' });
+    expect(run.inputs).toEqual([{ tick: 10, kind: 'act', id: 'filter_off' }]);
+    run.step(300 - 10);
+    expect(run.snapshot.params.filter!.enabled).toBe(true);
+    expect(run.log.some((e) => e.type === 'fault')).toBe(true);
+    expect(run.snapshot.impact.errorRate).toBeGreaterThan(0.5);
+    // the same action once the deploy is out is taken
+    const after = createRun(c);
+    after.step(240);
+    expect(after.act('filter_off')).toEqual({ ok: true });
+  });
+
   it('Bot C: doing nothing loses', () => {
     const { run } = playScript(c, []);
     expect(run.snapshot.status).toBe('lost');
@@ -176,20 +191,6 @@ describe('edge-rule case', () => {
     }
   });
 
-  it('if the fault never happens, the orders answer and clue are still true', () => {
-    // the win is switched off so the run is still going at tick 500 (filter_off early wins at about 369)
-    const run = createRun({ ...c, win: { ...c.win, holdTicks: c.maxTicks + 1 } });
-    run.step(200);
-    expect(run.act('filter_off')).toEqual({ ok: true });
-    run.step(300);
-    expect(run.log.some((e) => e.type === 'action_landed' && e.actionId === 'filter_off')).toBe(true);
-    expect(Math.max(run.snapshot.impact.errorRate, run.snapshot.nodes.edge!.saturation)).toBeLessThan(0.5);
-    const said = answerFor(c, 'devlead', 'orders', run.snapshot);
-    const found = run.observe('ask:devlead:orders');
-    expect(found.map((x) => x.id)).toEqual(['orders_change_small']);
-    for (const t of [said, found[0]!.text]) expect(t).not.toMatch(/after|before|broke|trouble|already/i);
-  });
-
   it('the shipped answer follows the rules deploy from its own tick, and stays true after a rollback', () => {
     const run = createRun(c);
     run.step(239);
@@ -241,6 +242,22 @@ describe('edge-rule case', () => {
       expect(sampled).toBeGreaterThan(0);
     }
     expect(bad).toEqual([]);
+  });
+
+  it('fuzz: nothing is taken before the first deploy, and only then is an act refused as too early', () => {
+    let early = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      const run = fuzz(c, seed, 400);
+      const trouble = run.log.find((e) => e.type === 'deploy' || e.type === 'fault')?.tick ?? Infinity;
+      for (const e of run.log) {
+        if (e.type === 'action') expect(e.tick, `seed ${seed}`).toBeGreaterThanOrEqual(trouble);
+        if (e.type === 'action_rejected' && e.reason === 'too_early') {
+          early++;
+          expect(e.tick, `seed ${seed}`).toBeLessThan(trouble);
+        }
+      }
+    }
+    expect(early).toBeGreaterThan(0);
   });
 
   it('fuzz after the fix: the recovery path and post-fix mistakes stay finite and non-negative', () => {

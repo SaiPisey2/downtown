@@ -130,7 +130,8 @@ export interface Snapshot extends FlowState {
   changes: { tick: number; target: NodeId; label: string; byPlayer: boolean }[];
 }
 
-export type RejectReason = 'unknown' | 'already_pending' | 'already_done' | 'not_running';
+/** `too_early`: nothing has gone wrong yet (no deploy or fault has happened) */
+export type RejectReason = 'unknown' | 'too_early' | 'already_pending' | 'already_done' | 'not_running';
 
 export type PlayerInput = { tick: number } & (
   | { kind: 'act'; id: string }

@@ -112,18 +112,41 @@ describe('run', () => {
 
   it('honours once, and allows repeats otherwise', () => {
     const once = createRun(model({ actions: [{ ...model().actions[0]!, once: true, delayTicks: 1 }] }));
-    once.step(5);
+    once.step(12);
     once.act('rollback_rules');
     once.step(2);
     expect(once.act('rollback_rules')).toEqual({ ok: false, reason: 'already_done' });
     const rep = createRun(model({ actions: [{ ...model().actions[0]!, delayTicks: 1 }] }));
+    rep.step(12);
     rep.act('rollback_rules');
     rep.step(2);
     expect(rep.act('rollback_rules')).toEqual({ ok: true });
   });
 
+  it('rejects acts as too_early until the first deploy or fault, and still records them', () => {
+    const r = createRun(model());
+    r.step(9);
+    expect(r.act('rollback_rules')).toEqual({ ok: false, reason: 'too_early' });
+    expect(r.act('nope')).toEqual({ ok: false, reason: 'unknown' });
+    expect(r.snapshot.pending).toEqual([]);
+    expect(r.inputs.filter((i) => i.kind === 'act')).toHaveLength(2);
+    expect(r.log.filter((e) => e.type === 'action_rejected')).toEqual([
+      { tick: 9, type: 'action_rejected', actionId: 'rollback_rules', reason: 'too_early' },
+      { tick: 9, type: 'action_rejected', actionId: 'nope', reason: 'unknown' },
+    ]);
+    r.step(1);
+    expect(r.act('rollback_rules')).toEqual({ ok: true });
+    // a fault with no deploy before it opens the way as well
+    const faultOnly = createRun(model({ timeline: model().timeline.filter((e) => e.kind === 'modify') }));
+    faultOnly.step(9);
+    expect(faultOnly.act('rollback_rules')).toEqual({ ok: false, reason: 'too_early' });
+    faultOnly.step(1);
+    expect(faultOnly.act('rollback_rules')).toEqual({ ok: true });
+  });
+
   it('returns a new snapshot each tick and never mutates old ones', () => {
     const r = createRun(model());
+    r.step(10);
     const a = r.step(1);
     const frozen = JSON.stringify(a);
     const b = r.step(1);

@@ -38,6 +38,8 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
   const done = new Set<string>();
   const pending: { actionId: string; landsAt: number }[] = [];
   let winStreak = 0;
+  /** a deploy or fault has happened: until then there is nothing to act on */
+  let troubled = false;
 
   const baseParams = (): Record<NodeId, NodeParams> =>
     Object.fromEntries(ids.map((id) => [id, { ...model.nodes[id]! }]));
@@ -96,6 +98,7 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
       const label = ev.label ?? '';
       if (target !== undefined) {
         emit(t, { type: ev.kind === 'deploy' ? 'deploy' : 'fault', target, label });
+        troubled = true;
         if (ev.kind === 'deploy') changes.push({ tick: t, target, label, byPlayer: false });
       }
       if (ev.modifier) apply(ev.modifier);
@@ -170,6 +173,7 @@ export function createRun(model: CaseModel, seed: number = model.seed): Run {
       if (snap.status !== 'running') return reject('not_running');
       const def = model.actions.find((a) => a.id === actionId);
       if (!def) return reject('unknown');
+      if (!troubled) return reject('too_early');
       if (pending.some((p) => p.actionId === actionId)) return reject('already_pending');
       if (def.once && done.has(actionId)) return reject('already_done');
       pending.push({ actionId, landsAt: snap.tick + def.delayTicks });

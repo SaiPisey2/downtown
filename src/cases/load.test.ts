@@ -58,7 +58,9 @@ describe('tutorial case', () => {
 
   it('is won by rolling back the shop after the fault', () => {
     const run = createRun(cases.tutorial!);
-    run.step(22);
+    run.step(5);
+    expect(run.act('rollback')).toEqual({ ok: false, reason: 'too_early' });
+    run.step(17);
     expect(run.act('rollback')).toEqual({ ok: true });
     run.step(200);
     expect(run.snapshot.status).toBe('won');

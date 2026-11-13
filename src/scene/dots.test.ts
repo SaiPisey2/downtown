@@ -95,16 +95,17 @@ describe('stepDots', () => {
     const rng = visualRng(2);
     const budget = dotBudget(failing, 800);
     let dots: Dot[] = [];
+    // one assertion at the end: an expect per dot per step made this test slow enough to time out under load
+    const bad: string[] = [];
     for (let i = 0; i < 400; i++) {
       dots = stepDots(dots, budget, rng() * 3, rng);
       for (const d of dots) {
-        expect(d.t).toBeGreaterThanOrEqual(0);
-        expect(d.t).toBeLessThanOrEqual(1);
-        expect(d.fall).toBeGreaterThanOrEqual(0);
-        expect(d.fall).toBeLessThan(1);
-        if (d.fall > 0) expect(d.kind).toBe('failed');
+        if (!(d.t >= 0 && d.t <= 1 && d.fall >= 0 && d.fall < 1) || (d.fall > 0 && d.kind !== 'failed')) {
+          bad.push(`step ${i}: ${JSON.stringify(d)}`);
+        }
       }
     }
+    expect(bad).toEqual([]);
   });
   it('stops a failed dot where it fails and lets it fall', () => {
     const budget = { 'a>b': { ok: 0, retry: 0, failed: 1 } };

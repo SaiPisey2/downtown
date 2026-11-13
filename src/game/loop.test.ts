@@ -150,6 +150,9 @@ describe('store', () => {
 
   it('records rejected actions and refreshes snap and log at once', () => {
     useGame.getState().act('rollback');
+    expect(useGame.getState().lastAction).toEqual({ id: 'rollback', ok: false, reason: 'too_early' });
+    for (let i = 0; i < 4 * 4; i++) advance(250);
+    useGame.getState().act('rollback');
     useGame.getState().act('rollback');
     const s = useGame.getState();
     expect(s.lastAction).toEqual({ id: 'rollback', ok: false, reason: 'already_pending' });

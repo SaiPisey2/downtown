@@ -9,6 +9,7 @@ import { ClockIcon } from './BuildingPanel';
 import { HealthIcon } from './HealthIcon';
 
 export const REFUSAL: Record<RejectReason, string> = {
+  too_early: 'Nothing is wrong yet',
   already_pending: 'That is already in progress',
   already_done: 'Already done',
   not_running: 'The incident is over',
