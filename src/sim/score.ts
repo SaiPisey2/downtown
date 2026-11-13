@@ -10,6 +10,8 @@ export interface Score {
   outcome: 'won' | 'lost';
   ticks: number;
   hints: number;
+  /** 0, or minus the penalty when a fast fix won and the clean fix never landed */
+  shortcut: number;
 }
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
@@ -25,7 +27,17 @@ export function score(model: CaseModel, log: readonly GameEvent[], final: Snapsh
   const detect = keyClue ? 15 * clamp01(2 - (keyClue.tick - firstFault) / detectParTicks) : 0;
 
   const won = first('won');
-  const recover = won ? 35 * clamp01(2 - (won.tick - firstFault) / recoverParTicks) : 0;
+  const landed = (id: string | undefined) =>
+    id === undefined ? undefined : log.find((e) => e.type === 'action_landed' && e.actionId === id);
+  const { cleanFixAction, shortcutActions = [], shortcutPenalty = 0 } = model.scoring;
+  const clean = landed(cleanFixAction);
+  // the clean fix is slow by nature: its own delay does not count against recovery
+  const cleanDelay = clean && won && clean.tick <= won.tick
+    ? model.actions.find((a) => a.id === cleanFixAction)?.delayTicks ?? 0
+    : 0;
+  const recover = won ? 35 * clamp01(2 - (won.tick - firstFault) / (recoverParTicks + cleanDelay)) : 0;
+  const shortcutTaken = shortcutActions.some((id) => landed(id) !== undefined);
+  const shortcut = won && shortcutTaken && !clean ? -Math.round(shortcutPenalty) : 0;
 
   const traffic = Math.max(0, 25 * (1 - final.impact.failed / model.lose.maxFailedRequests));
 
@@ -45,9 +57,9 @@ export function score(model: CaseModel, log: readonly GameEvent[], final: Snapsh
 
   const hints = log.filter((e) => e.type === 'hint' && e.clueId !== null).length;
   const parts = [detect, recover, traffic, harm, updates].map(Math.round) as [number, number, number, number, number];
-  const total = Math.max(0, parts[0] + parts[1] + parts[2] + parts[3] + parts[4] - HINT_COST * hints);
+  const total = Math.max(0, parts[0] + parts[1] + parts[2] + parts[3] + parts[4] + shortcut - HINT_COST * hints);
   return {
     total, detect: parts[0], recover: parts[1], traffic: parts[2], harm: parts[3], updates: parts[4],
-    outcome: final.status === 'won' ? 'won' : 'lost', ticks: final.tick, hints,
+    outcome: final.status === 'won' ? 'won' : 'lost', ticks: final.tick, hints, shortcut,
   };
 }

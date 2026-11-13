@@ -71,6 +71,79 @@ describe('score', () => {
     }
   });
 
+  describe('a fast fix against the clean one', () => {
+    const scoring = {
+      detectParTicks: 20, recoverParTicks: 60, updateEveryTicks: 20,
+      cleanFixAction: 'rollback_rules', shortcutActions: ['quick_fix'], shortcutPenalty: 8,
+    };
+    const m = testModel({ scoring });
+    const play = (moves: (r: Run) => void, model = m): Score => {
+      const r = createRun(model);
+      r.step(11);
+      r.observe('graph:edge.saturation');
+      r.update('honest');
+      moves(r);
+      r.step(1000);
+      return score(model, r.log, r.snapshot);
+    };
+    const sum = (s: Score) => s.detect + s.recover + s.traffic + s.harm + s.updates;
+
+    it('a won run fixed only the fast way loses the shortcut penalty, shown as its own part', () => {
+      const s = play((r) => r.act('quick_fix'));
+      expect(s.outcome).toBe('won');
+      expect(s.shortcut).toBe(-8);
+      expect(s.total).toBe(sum(s) - 8);
+      const plain = play((r) => r.act('quick_fix'), testModel());
+      expect(plain.shortcut).toBe(0);
+      expect(plain.total).toBe(s.total + 8);
+    });
+
+    it('no penalty when the clean fix also landed, or with no shortcut taken', () => {
+      // held long enough for the clean fix to land before the win
+      const both = play((r) => {
+        r.act('rollback_rules');
+        r.act('quick_fix');
+      }, testModel({ scoring, win: { ...testModel().win, holdTicks: 20 } }));
+      expect(both.outcome).toBe('won');
+      expect(both.shortcut).toBe(0);
+      expect(play((r) => r.act('rollback_rules')).shortcut).toBe(0);
+    });
+
+    it('no penalty on a lost run', () => {
+      const lost = testModel({ scoring, maxTicks: 30, win: { ...testModel().win, holdTicks: 100 } });
+      const s = play((r) => r.act('quick_fix'), lost);
+      expect(s.outcome).toBe('lost');
+      expect(s.shortcut).toBe(0);
+    });
+
+    it("the clean fix's own delay is added to the recovery par, so it is not punished for it", () => {
+      const tight = { ...scoring, recoverParTicks: 20 };
+      const late = (r: Run) => {
+        r.step(29);
+        r.act('rollback_rules');
+      };
+      const without = play(late, testModel({ scoring: { ...tight, cleanFixAction: undefined } }));
+      const withClean = play(late, testModel({ scoring: tight }));
+      expect(without.outcome).toBe('won');
+      // won about 46 ticks after the fault: 35 x (2 - 46/20) is 0; with the par at 20 + 10, 35 x (2 - 46/30) is 16
+      expect(without.recover).toBe(0);
+      expect(withClean.recover).toBeGreaterThan(10);
+      expect(withClean.recover).toBe(Math.round(35 * Math.min(1, Math.max(0, 2 - (withClean.ticks - 10) / 30))));
+    });
+
+    it('the total stays an integer from 0 to 100, the penalty floored at 0', () => {
+      const harsh = testModel({ scoring: { ...scoring, shortcutPenalty: 1000 } });
+      const s = play((r) => r.act('quick_fix'), harsh);
+      expect(s.total).toBe(0);
+      expect(s.shortcut).toBe(-1000);
+      for (const x of [s, play((r) => r.act('quick_fix')), play((r) => r.act('rollback_rules'))]) {
+        expect(Number.isInteger(x.total) && Number.isInteger(x.shortcut)).toBe(true);
+        expect(x.total).toBeGreaterThanOrEqual(0);
+        expect(x.total).toBeLessThanOrEqual(100);
+      }
+    });
+  });
+
   it('gives full updates credit when no window has completed', () => {
     const m = testModel({ maxTicks: 25 });
     const r = createRun(m);

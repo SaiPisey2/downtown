@@ -18,7 +18,7 @@ briefing: >-
   and bring it back. Keep people told as you go.
 
 nodes:
-  gate:     { instances: 1,  rpsPerInstance: 2020, costMul: 1, capacityMul: 1, enabled: true, queueMax: 0,    baseLatencyMs: 1 }
+  gate:     { instances: 1,  rpsPerInstance: 2860, costMul: 1, capacityMul: 1, enabled: true, queueMax: 0,    baseLatencyMs: 1 }
   edge:     { instances: 10, rpsPerInstance: 7080, costMul: 1, capacityMul: 1, enabled: true, queueMax: 400,  baseLatencyMs: 2 }
   filter:   { instances: 1,  rpsPerInstance: 100,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 0,    baseLatencyMs: 1 }
   web:      { instances: 6,  rpsPerInstance: 400,  costMul: 1, capacityMul: 1, enabled: true, queueMax: 4000, baseLatencyMs: 10 }
@@ -108,7 +108,7 @@ actions:
     effects:
       - target: gate
         flags: { blocked: true }
-        mul: { capacityMul: 0.7 }
+        mul: { capacityMul: 0.466 }
         while: { metric: gate.flag:blocked, op: "==", value: true }
       - target: edge
         mul: { costMul: 2 }
@@ -159,7 +159,7 @@ win:
       - { metric: city.tick, op: ">=", value: 250 }
   holdTicks: 120
 lose:
-  maxFailedRequests: 1100000
+  maxFailedRequests: 2700000
 
 clues:
   - id: cpu_everywhere
@@ -221,7 +221,9 @@ scoring:
   detectParTicks: 120
   recoverParTicks: 360
   updateEveryTicks: 120
-  cleanFixBonusAction: rollback_rules
+  cleanFixAction: rollback_rules
+  shortcutActions: [filter_off]
+  shortcutPenalty: 8
 
 signals:
   graphs:

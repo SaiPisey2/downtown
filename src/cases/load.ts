@@ -114,9 +114,11 @@ function check(c: CaseFile): string[] {
     lineKey(a.consequenceKey, `action "${a.id}" consequenceKey`);
   }
   if (!c.actions.some((a) => a.resolves)) issues.push('no action has resolves: true');
-  const bonus = c.scoring.cleanFixBonusAction;
-  if (bonus !== undefined && !c.actions.some((a) => a.id === bonus)) {
-    issues.push(`scoring.cleanFixBonusAction: unknown action "${bonus}"`);
+  const isAction = (id: string): boolean => c.actions.some((a) => a.id === id);
+  const clean = c.scoring.cleanFixAction;
+  if (clean !== undefined && !isAction(clean)) issues.push(`scoring.cleanFixAction: unknown action "${clean}"`);
+  for (const id of c.scoring.shortcutActions ?? []) {
+    if (!isAction(id)) issues.push(`scoring.shortcutActions: unknown action "${id}"`);
   }
 
   // every Cond metric must name a real node

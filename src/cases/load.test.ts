@@ -142,10 +142,13 @@ describe('reference checks', () => {
     });
     expect(parseCase(ok, PATH).clues).toHaveLength(2);
   });
-  it('fails on unknown reveals, knows, and cleanFixBonusAction', () => {
+  it('fails on unknown reveals, knows, and scoring actions', () => {
     expectFail((d) => (d.cast[0].questions[0].reveals = 'ghost'), 'ghost');
     expectFail((d) => (d.cast[0].knows = ['phantom']), 'phantom');
-    expectFail((d) => (d.scoring.cleanFixBonusAction = 'nothing'), 'nothing');
+    expectFail((d) => (d.scoring.cleanFixAction = 'nothing'), 'scoring.cleanFixAction', 'nothing');
+    expectFail((d) => (d.scoring.shortcutActions = ['rollback', 'zilch']), 'scoring.shortcutActions', 'zilch');
+    expectFail((d) => (d.scoring.shortcutPenalty = -1), 'shortcutPenalty');
+    expectFail((d) => (d.scoring.cleanFixBonusAction = 'rollback'), 'cleanFixBonusAction');
   });
   it('fails on unknown nodes in conds, modifiers, layout and signals', () => {
     expectFail((d) => (d.win.cond.all[0].metric = 'moat.errorRate'), 'moat');

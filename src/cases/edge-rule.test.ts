@@ -65,22 +65,47 @@ describe('edge-rule case', () => {
     expect(faults[0]?.tick).toBe(242);
   });
 
-  it('Bot A: switching the filter off wins with a good score', () => {
-    const { run, score } = playScript(c, byTick([
-      ...KEY_CLUES,
-      { at: 480, do: 'act', arg: 'filter_off' },
-      ...honestUpdates(700),
-    ]));
+  const BOT_A_SCRIPT: ScriptStep[] = byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'filter_off' }, ...honestUpdates(700)]);
+  const BOT_B_SCRIPT: ScriptStep[] = byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'rollback_rules' }, ...honestUpdates(1000)]);
+
+  it('Bot A: switching the filter off wins with a good score, less the fast-fix penalty', () => {
+    const { run, score } = playScript(c, BOT_A_SCRIPT);
     expect(run.snapshot.status).toBe('won');
+    expect(score.shortcut).toBe(-8);
     expect(score.total).toBeGreaterThanOrEqual(80);
-    expect(score.total).toBeLessThanOrEqual(95);
+    expect(score.total).toBeLessThanOrEqual(88);
   });
 
-  it('Bot B: rolling the rules back wins, but recovers later than Bot A', () => {
-    const a = playScript(c, byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'filter_off' }, ...honestUpdates(700)]));
-    const b = playScript(c, byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'rollback_rules' }, ...honestUpdates(1000)]));
+  it('Bot B: rolling the rules back recovers later than Bot A but scores higher', () => {
+    const a = playScript(c, BOT_A_SCRIPT);
+    const b = playScript(c, BOT_B_SCRIPT);
     expect(b.run.snapshot.status).toBe('won');
-    expect(b.score.recover).toBeLessThan(a.score.recover);
+    expect(b.run.snapshot.tick).toBeGreaterThan(a.run.snapshot.tick);
+    expect(b.score.shortcut).toBe(0);
+    expect(b.score.total).toBeGreaterThanOrEqual(88);
+    expect(b.score.total).toBeLessThanOrEqual(96);
+    expect(b.score.total).toBeGreaterThan(a.score.total);
+  });
+
+  it('a clean fix started as late as tick 1200 still wins', () => {
+    const { run, score } = playScript(c, byTick([...KEY_CLUES, { at: 1200, do: 'act', arg: 'rollback_rules' }, ...honestUpdates(1700)]));
+    expect(run.snapshot.status).toBe('won');
+    expect(score.total).toBeLessThan(playScript(c, BOT_B_SCRIPT).score.total);
+  });
+
+  it('a late fast fix (tick 1500) still wins, with a clearly lower score than Bot A', () => {
+    const { run, score } = playScript(c, byTick([...KEY_CLUES, { at: 1500, do: 'act', arg: 'filter_off' }, ...honestUpdates(1700)]));
+    expect(run.snapshot.status).toBe('won');
+    expect(score.total).toBeLessThanOrEqual(playScript(c, BOT_A_SCRIPT).score.total - 20);
+  });
+
+  it('left alone, the city is lost on impact between tick 1800 and tick 2400, scoring under 30', () => {
+    const { run, score } = playScript(c, []);
+    expect(run.snapshot.status).toBe('lost');
+    expect(run.log.at(-1)).toMatchObject({ type: 'lost', reason: 'impact' });
+    expect(run.snapshot.tick).toBeGreaterThanOrEqual(1800);
+    expect(run.snapshot.tick).toBeLessThanOrEqual(2400);
+    expect(score.total).toBeLessThan(30);
   });
 
   it('an action before anything is wrong is refused, and the run goes on to the fault', () => {
@@ -98,10 +123,6 @@ describe('edge-rule case', () => {
     expect(after.act('filter_off')).toEqual({ ok: true });
   });
 
-  it('Bot C: doing nothing loses', () => {
-    const { run } = playScript(c, []);
-    expect(run.snapshot.status).toBe('lost');
-  });
 
   const harmful = c.actions.filter((a) => a.harmful).map((a) => a.id);
   it('has exactly the three harmful actions', () => {
@@ -156,20 +177,21 @@ describe('edge-rule case', () => {
     expect(run.observe('graph:orders.errorRate').map((x) => x.id)).toEqual(['orders_fine']);
   });
 
-  const BOT_A: ScriptStep[] = byTick([...KEY_CLUES, { at: 480, do: 'act', arg: 'filter_off' }, ...honestUpdates(700)]);
   const recovery: [string, ScriptStep[]][] = [
     ['restart_edge', [{ at: 300, do: 'act', arg: 'restart_edge' }]],
     ['block_sources', [{ at: 300, do: 'act', arg: 'block_sources' }, { at: 500, do: 'act', arg: 'unblock_sources' }]],
     ['rollback_orders', [{ at: 300, do: 'act', arg: 'rollback_orders' }]],
     ['restart_edge then rollback_orders', [{ at: 300, do: 'act', arg: 'restart_edge' }, { at: 360, do: 'act', arg: 'rollback_orders' }]],
   ];
-  it.each(recovery)('a mistake (%s) followed by the right fix is still won, with a lower score than Bot A', (_name, mistakes) => {
-    const a = playScript(c, BOT_A);
-    const m = playScript(c, byTick([...BOT_A, ...mistakes]));
-    expect(m.run.snapshot.status).toBe('won');
-    expect(m.run.snapshot.tick).toBeLessThan(c.maxTicks);
-    expect(m.score.total).toBeLessThan(a.score.total);
-  });
+  for (const [bot, script] of [['Bot A', BOT_A_SCRIPT], ['Bot B', BOT_B_SCRIPT]] as const) {
+    it.each(recovery)(`a mistake (%s) followed by the fix is still won, with a lower score than ${bot}`, (_name, mistakes) => {
+      const clean = playScript(c, script);
+      const m = playScript(c, byTick([...script, ...mistakes]));
+      expect(m.run.snapshot.status).toBe('won');
+      expect(m.run.snapshot.tick).toBeLessThan(c.maxTicks);
+      expect(m.score.total).toBeLessThan(clean.score.total);
+    });
+  }
 
   const asks = c.cast.flatMap((m) => m.questions.map((q) => ({ m, q, route: `ask:${m.id}:${q.id}` })));
   it('before the fault, no question reveals a clue and the "before" answers are shown', () => {

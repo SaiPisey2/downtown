@@ -30,6 +30,10 @@ export const testModel = (over: Partial<CaseModel> = {}): CaseModel => ({
       id: 'restart_db', target: 'db', label: 'Restart db', verb: 'restart',
       delayTicks: 2, effects: [], resolves: false, harmful: true,
     },
+    {
+      id: 'quick_fix', target: 'edge', label: 'Switch the rules off', verb: 'switch',
+      delayTicks: 1, effects: [], clears: ['rules'], resolves: true, harmful: false,
+    },
   ],
   win: {
     cond: { all: [{ metric: 'city.errorRate', op: '<', value: 0.01 }, { metric: 'city.tick', op: '>=', value: 15 }] },

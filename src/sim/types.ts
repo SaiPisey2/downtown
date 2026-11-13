@@ -118,7 +118,12 @@ export interface ScoringDef {
   detectParTicks: number;
   recoverParTicks: number;
   updateEveryTicks: number;
-  cleanFixBonusAction?: string;
+  /** the fix that removes the cause; its own delay is added to the recovery par when it lands before the win */
+  cleanFixAction?: string;
+  /** fixes that bring the city back but leave the cause in place */
+  shortcutActions?: string[];
+  /** taken off a won run where a shortcut landed and the clean fix never did */
+  shortcutPenalty?: number;
 }
 
 export interface Snapshot extends FlowState {

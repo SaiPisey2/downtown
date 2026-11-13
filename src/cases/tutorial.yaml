@@ -77,7 +77,7 @@ scoring:
   detectParTicks: 60
   recoverParTicks: 120
   updateEveryTicks: 120
-  cleanFixBonusAction: rollback
+  cleanFixAction: rollback
 signals:
   graphs:
     gate: [arrivals, errorRate]
