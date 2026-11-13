@@ -147,8 +147,10 @@ test('pause, hints and the away notice', async ({ page }) => {
 
   const hint = page.getByRole('button', { name: /hint/i });
   await expect(hint).toContainText('−3 points');
+  // orders start failing at tick 16; from then two clues are true: the shop's new build in the changes,
+  // and Priya's word that she shipped it
+  await expect.poll(() => tick(page), { timeout: 15_000 }).toBeGreaterThan(17);
   await hint.focus();
-  // two clues are true by now: the shop's new build in the changes, and Priya's word that she shipped it
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status').filter({ hasText: /^Hint:.*new build just before/ })).toBeVisible();
   await page.keyboard.press('Enter');
