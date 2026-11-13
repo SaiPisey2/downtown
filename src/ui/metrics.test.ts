@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { cases } from '../cases';
+import { createRun } from '../sim';
 import type { NodeView } from '../sim';
 import { STATUS_WORD, buildingHealth } from './metrics';
 
@@ -17,5 +19,17 @@ describe('building status', () => {
     expect(STATUS_WORD[buildingHealth(view({ saturation: 1, dropped: 5 }))]).toBe('failing');
     expect(STATUS_WORD[buildingHealth(view({ errorRate: 0.3 }))]).toBe('failing');
     expect(STATUS_WORD[buildingHealth(undefined)]).toBe('ok');
+  });
+});
+
+describe('a healthy day', () => {
+  it.each(Object.keys(cases))('in %s, every building reads Healthy until the first trouble', (id) => {
+    const c = cases[id]!;
+    const firstTrouble = Math.min(...c.timeline.filter((e) => e.kind !== 'message').map((e) => e.at));
+    const run = createRun(c);
+    for (let t = 1; t < firstTrouble; t++) {
+      run.step();
+      for (const [node, v] of Object.entries(run.snapshot.nodes)) expect(buildingHealth(v), `${node} at tick ${t}`).toBe('ok');
+    }
   });
 });
