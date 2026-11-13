@@ -247,11 +247,25 @@ signals:
     orders: [arrivals, errorRate, saturation]
     db: [arrivals, saturation]
   logs:
+    # each line only while it is true: the edge also runs full for a moment while it clears its queue after a fix
     edge:
-      - when: { metric: edge.saturation, op: ">", value: 0.95 }
+      - when:
+          all:
+            - { metric: edge.saturation, op: ">", value: 0.95 }
+            - { metric: filter.flag:rules, op: "==", value: "412" }
+            - { metric: filter.enabled, op: "==", value: true }
         lines:
           - "WARN worker busy for 4000 ms on a single request check"
+      - when: { metric: edge.dropped, op: ">", value: 0.5 }
+        lines:
           - "WARN request queue full, turning visitors away"
+      - when:
+          all:
+            - { metric: edge.saturation, op: ">", value: 0.95 }
+            - { metric: web.errorRate, op: "<", value: 0.01 }
+            - { metric: api.errorRate, op: "<", value: 0.01 }
+            - { metric: orders.saturation, op: "<", value: 0.95 }
+        lines:
           - "INFO upstream services healthy"
       - when: { metric: edge.saturation, op: "<=", value: 0.95 }
         lines:
@@ -261,9 +275,12 @@ signals:
         lines:
           - "INFO block list active, turning away matching visitors"
     orders:
-      - when: { metric: orders.saturation, op: ">", value: 0.95 }
+      - when:
+          all:
+            - { metric: orders.saturation, op: ">", value: 0.95 }
+            - { metric: orders.queue, op: ">", value: 0.5 }
         lines:
-          - "WARN orders backlog growing after restart"
+          - "WARN orders running at capacity, requests waiting"
       - when: { metric: orders.saturation, op: "<=", value: 0.95 }
         lines:
           - "INFO orders processing normally"

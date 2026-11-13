@@ -94,9 +94,14 @@ signals:
     ledger: [arrivals, saturation]
   logs:
     shop:
-      - when: { metric: shop.saturation, op: ">", value: 0.95 }
+      - when: { metric: shop.dropped, op: ">", value: 0.5 }
         lines:
           - "WARN order queue is full, dropping orders"
+      - when:
+          all:
+            - { metric: shop.saturation, op: ">", value: 0.95 }
+            - { metric: shop.flag:build, op: "==", value: v2 }
+        lines:
           - "WARN handler is slower than before"
     ledger:
       - when: { metric: ledger.saturation, op: "<", value: 0.5 }

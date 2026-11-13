@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRun, findableClues, type GameEvent, type Snapshot } from '../sim';
+import { createRun, evalCond, findableClues, type GameEvent, type Snapshot } from '../sim';
 import { STAKEHOLDER_LINES, answerFor, cases, type CaseFile } from './index';
 
 /**
@@ -7,7 +7,8 @@ import { STAKEHOLDER_LINES, answerFor, cases, type CaseFile } from './index';
  * against what the city is doing at that tick. A line is shown when:
  * - a clue's `when` holds (a look or a hint could show its text now);
  * - a question is asked (its answer, `answerBefore` or `answer`, for this tick);
- * - an event in the log is said (timeline messages, consequences, outcomes, acknowledgements, the nudge).
+ * - an event in the log is said (timeline messages, consequences, outcomes, acknowledgements, the nudge);
+ * - a building's log rule holds (each of its lines can be drawn).
  * The notebook only repeats a clue with the time it was found, so it is checked when found.
  */
 
@@ -56,6 +57,17 @@ const RULES: Rule[] = [
   { name: 'orders short-handed', match: /orders service restarted/i, holds: (x) => x.snap.params.orders!.capacityMul < 1 },
   { name: 'the wording fixes', match: /wording fixes|wording on the order page/i, holds: (x) => deployed(x, 'orders') },
   { name: 'the site is back', match: /back for customers|going through again/i, holds: (x) => errNow(x) < 0.01 },
+  // building logs
+  { name: 'the edge is busy on request checks', match: /worker busy for 4000 ms/i, holds: (x) => node(x, 'edge').saturation > 0.95 && x.snap.flags.filter?.rules === '412' && x.snap.params.filter?.enabled === true },
+  { name: 'the edge turns visitors away', match: /request queue full, turning visitors away/i, holds: (x) => node(x, 'edge').dropped > 0 },
+  { name: 'services behind the edge are healthy', match: /upstream services healthy/i, holds: (x) => ['web', 'api', 'cache', 'accounts', 'orders', 'db'].every((id) => node(x, id).errorRate < 0.01 && node(x, id).saturation < 0.95) },
+  { name: 'request checks within budget', match: /request checks within budget/i, holds: (x) => node(x, 'edge').saturation < 0.95 },
+  { name: 'the gate block is on', match: /block list active/i, holds: (x) => x.snap.flags.gate?.blocked === true },
+  { name: 'orders has a backlog', match: /orders running at capacity, requests waiting/i, holds: (x) => node(x, 'orders').saturation > 0.95 && node(x, 'orders').queue > 0 },
+  { name: 'orders processing normally', match: /orders processing normally/i, holds: (x) => node(x, 'orders').errorRate < 0.01 && node(x, 'orders').saturation < 0.95 },
+  { name: 'the shop drops orders', match: /order queue is full, dropping orders/i, holds: (x) => (x.snap.nodes.shop?.dropped ?? 0) > 0 },
+  { name: 'the shop handler is slower', match: /handler is slower than before/i, holds: (x) => x.snap.flags.shop?.build === 'v2' },
+  { name: 'the ledger is quiet', match: /ledger is quiet/i, holds: (x) => (x.snap.nodes.ledger?.saturation ?? 1) < 0.5 },
   // the tutorial
   { name: 'a new shop build', match: /put out a new shop build|shop got a new build|new shop build today/i, holds: (x) => deployed(x, 'shop') },
   { name: 'orders started to fail', match: /before the orders started to fail/i, holds: (x) => x.recentErr.some((e) => e >= 0.01) },
@@ -157,6 +169,10 @@ function play(c: CaseFile, acts: [number, string][]): { shown: Shown[]; checks: 
       }
     }
     for (const m of c.cast) for (const q of m.questions) say(`ask ${m.id}:${q.id}`, answerFor(c, m.id, q.id, snap));
+    // a building's log draws its lines from every rule whose when holds now
+    for (const [id, rules] of Object.entries(c.signals.logs)) {
+      for (const r of rules) if (evalCond(r.when, snap)) for (const l of r.lines) say(`log ${id}`, l.replace(/^(INFO|WARN|ERROR) /, ''));
+    }
     for (const e of run.log.filter((e) => e.tick === snap.tick)) {
       if (e.type === 'message') say(`message ${e.lineKey}`, c.lines[e.lineKey]);
       if (e.type === 'action_landed') {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cases } from '../cases';
-import { createRun } from '../sim';
+import { createRun, evalCond } from '../sim';
 import type { Snapshot } from '../sim';
 import { logLines } from './logs';
 
@@ -32,12 +32,12 @@ describe('logLines', () => {
   });
 
   it('only ever picks lines from rules that hold, each with a simulated timestamp', () => {
-    const allowed = new Set(edgeRule.signals.logs.edge![0]!.lines);
     const run = createRun(edgeRule);
     run.step(260);
     const seen = new Set<string>();
     for (let i = 0; i < 40; i++) {
       run.step(1);
+      const allowed = new Set(edgeRule.signals.logs.edge!.filter((r) => evalCond(r.when, run.snapshot)).flatMap((r) => r.lines));
       const lines = logLines(edgeRule, 'edge', run.snapshot, 1907);
       expect(lines.length).toBeGreaterThan(0);
       expect(lines.length).toBeLessThanOrEqual(8);
