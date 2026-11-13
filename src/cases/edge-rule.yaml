@@ -173,7 +173,7 @@ clues:
     when: { metric: filter.flag:rules, op: "==", value: "412" }
     weight: 9
     key: true
-    text: Rules update 412 went out to the filter two ticks before the edge ran out of CPU. It reached every edge machine in one step.
+    text: Rules update 412 went out to the filter two seconds before the edge ran out of CPU. It reached every edge machine in one step.
   - id: volume_normal
     route: ask:netops:volume
     when: { metric: city.tick, op: ">=", value: 242 }

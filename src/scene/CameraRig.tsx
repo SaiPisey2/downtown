@@ -69,6 +69,7 @@ export function CameraRig({ layout, drift = false }: { layout: CaseFile['layout'
   const held = useRef(new Set<string>());
   const tapped = useRef(new Map<string, number>());
   const shift = useRef(false);
+  const calm = useGame((s) => s.reducedMotion);
   const tmp = useMemo(() => ({ sph: new Spherical(), off: new Vector3(), fwd: new Vector3(), right: new Vector3() }), []);
 
   useLayoutEffect(() => {
@@ -182,7 +183,8 @@ export function CameraRig({ layout, drift = false }: { layout: CaseFile['layout'
     driveFromKeys(ctl, Math.min(dt, 0.1));
     const g = goal.current;
     if (g) {
-      const k = 1 - Math.exp(-Math.min(dt, 0.1) * EASE);
+      // reduced motion: arrive at once
+      const k = calmMotion() ? 1 : 1 - Math.exp(-Math.min(dt, 0.1) * EASE);
       next.copy(ctl.target).lerp(g.target, k);
       if (g.position) camera.position.lerp(g.position, k);
       else camera.position.add(next).sub(ctl.target);
@@ -210,7 +212,7 @@ export function CameraRig({ layout, drift = false }: { layout: CaseFile['layout'
     <OrbitControls
       ref={controls}
       makeDefault
-      enableDamping
+      enableDamping={!calm}
       dampingFactor={0.12}
       minPolarAngle={CAMERA.minPolar}
       maxPolarAngle={CAMERA.maxPolar}
@@ -220,7 +222,7 @@ export function CameraRig({ layout, drift = false }: { layout: CaseFile['layout'
       enableRotate={!drift}
       enableZoom={!drift}
       enablePan={!drift}
-      autoRotate={drift && !calmMotion()}
+      autoRotate={drift && !calm}
       autoRotateSpeed={0.3}
     />
   );

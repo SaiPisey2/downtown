@@ -1402,9 +1402,10 @@
   z-index: 5;
   inset: 0;
   pointer-events: none;
+  /* dark behind the text column only (it ends near 590px), so the whole city beside it stays legible */
   background:
-    linear-gradient(90deg, rgba(6, 10, 24, 0.95) 0%, rgba(6, 10, 24, 0.9) 36%, rgba(6, 10, 24, 0.2) 60%, transparent 76%),
-    linear-gradient(0deg, rgba(6, 10, 24, 0.7) 0%, transparent 22%);
+    linear-gradient(90deg, rgba(6, 10, 24, 0.94) 0, rgba(6, 10, 24, 0.86) 500px, rgba(6, 10, 24, 0.3) 620px, transparent 700px),
+    linear-gradient(0deg, rgba(6, 10, 24, 0.7) 0%, transparent 18%);
 }
 .title-panel {
   position: absolute;
@@ -1884,4 +1885,342 @@
   border-radius: 50%;
   background: #9db4ff;
   box-shadow: 0 0 0 4px rgba(157, 180, 255, 0.2);
+}
+
+/* ---------- flat board: the city without 3D ---------- */
+
+.flat-screen {
+  position: absolute;
+  inset: 0;
+}
+.flat {
+  position: absolute;
+  top: calc(var(--hud-h) + var(--gap));
+  bottom: 56px;
+  left: calc(var(--inset-left, 0px) + 2 * var(--gap));
+  right: calc(var(--inset-right, 0px) + 2 * var(--gap));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 13px/1.3 var(--font);
+  color: var(--text);
+}
+.flat-backdrop {
+  top: 48px;
+  bottom: 64px;
+  right: 48px;
+}
+.flat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 20px;
+}
+.flat-notice {
+  margin: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.flat-area {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.flat-stage {
+  position: relative;
+  aspect-ratio: var(--ar);
+  width: min(100cqw, calc(100cqh * var(--ar)));
+  container-type: inline-size;
+}
+.flat-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.flat-plate {
+  fill: #2b3b5c;
+  opacity: 0.85;
+}
+.flat-plate-app {
+  fill: #24425a;
+}
+.flat-plate-data {
+  fill: #35355a;
+}
+.flat-district {
+  fill: rgba(178, 200, 245, 0.5);
+  font: 700 0.12px var(--font);
+  letter-spacing: 0.04px;
+  text-anchor: middle;
+}
+.flat-road line {
+  stroke: #6f86b0;
+  stroke-linecap: round;
+}
+.flat-road polygon {
+  fill: #6f86b0;
+}
+.flat-road-retry line {
+  stroke: var(--amber);
+  stroke-dasharray: 7 5;
+}
+.flat-road-retry polygon {
+  fill: var(--amber);
+}
+.flat-road-fail line {
+  stroke: #ff5a4a;
+  stroke-dasharray: 2 4;
+}
+.flat-road-fail polygon {
+  fill: #ff5a4a;
+}
+.flat-tile {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 7px 9px 8px;
+  font: inherit;
+  font-size: clamp(10.5px, calc(100cqw / var(--cols) * 0.12), 13.5px);
+  line-height: 1.25;
+  text-align: left;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(28, 42, 74, 0.96), rgba(14, 22, 44, 0.96));
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--teal);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+button.flat-tile {
+  cursor: pointer;
+}
+button.flat-tile:hover {
+  border-color: rgba(170, 196, 240, 0.55);
+  border-top-color: inherit;
+}
+.flat-tile-warn {
+  border-top-color: var(--amber);
+}
+.flat-tile-bad {
+  border-top-color: #ff5a4a;
+  background: linear-gradient(180deg, rgba(74, 26, 34, 0.96), rgba(30, 14, 26, 0.96));
+}
+.flat-tile-on {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px var(--teal), 0 0 22px rgba(94, 234, 212, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.flat-tile.flat-tile-on:focus-visible {
+  outline-offset: 4px;
+}
+.flat-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+.flat-name {
+  font-weight: 700;
+  font-size: 1.12em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flat-changed {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #ffd84a;
+  color: #2a2000;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.flat-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 650;
+}
+.flat-status .icon {
+  width: 1em;
+  height: 1em;
+}
+.flat-status-ok {
+  color: var(--teal);
+}
+.flat-status-warn {
+  color: var(--amber);
+}
+.flat-status-bad {
+  color: var(--red);
+}
+.flat-load {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.flat-load-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(150, 178, 230, 0.18);
+  overflow: hidden;
+}
+.flat-load-fill {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  transition: width 200ms linear;
+}
+.flat-tile-warn .flat-load-fill {
+  background: var(--amber);
+}
+.flat-tile-bad .flat-load-fill {
+  background: #ff6b5c;
+}
+.flat-k,
+.flat-nums {
+  color: var(--text-dim);
+  font-size: 0.86em;
+  white-space: nowrap;
+}
+.flat-nums {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.flat-nums .num {
+  color: var(--text);
+  font-weight: 650;
+}
+.flat-legend {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.flat-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.flat-key {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 3px solid #6f86b0;
+}
+.flat-key-retry {
+  border-top: 3px dashed var(--amber);
+}
+.flat-key-fail {
+  border-top: 3px dotted #ff5a4a;
+}
+
+/* ---------- settings sections ---------- */
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-section + .settings-section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.settings-h {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.settings-optional {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ---------- reduce motion, from Settings (it starts from the system's preference) ---------- */
+
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation-duration: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+/* ---------- narrow windows: the desktop notice ---------- */
+
+.desktop-only {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background: radial-gradient(ellipse 120% 90% at 50% 30%, #1a2950 0%, #0d1630 55%, #060a18 100%);
+  font: 15px/1.55 var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+.desktop-only-box {
+  max-width: 440px;
+}
+.desktop-only .title-kicker {
+  margin: 0;
+}
+.desktop-only h1 {
+  margin: 12px 0 0;
+  font-size: 56px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  background: linear-gradient(180deg, #ffffff 30%, #b9c9ec 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.desktop-only-need {
+  margin: 18px 0 0;
+  font-size: 19px;
+  font-weight: 650;
+  color: var(--teal);
+}
+.desktop-only-text {
+  margin: 12px 0 0;
+  color: var(--text-dim);
+}
+.desktop-only-link {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--focus);
+  font-weight: 600;
+}
+.desktop-only a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* the play screen's main landmark: the city and what is said about it; positioned without a z-index, so it adds no stacking layer */
+.play-main {
+  position: absolute;
+  inset: 0;
 }

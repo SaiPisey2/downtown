@@ -25,6 +25,13 @@ export const MAX_INPUTS = 2_000;
 /** Longest id, route or case id inside a shared run. */
 const MAX_STR = 80;
 
+/**
+ * Seeds a link may carry: the simulation's generator keeps only 32 bits of a
+ * seed, so anything wider would only alias a smaller one. Signed or unsigned.
+ */
+const MIN_SEED = -(2 ** 31);
+const MAX_SEED = 2 ** 32 - 1;
+
 const tick = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const str = z.string().max(MAX_STR);
 const input = z.union([z.tuple([tick, z.enum(['a', 'o', 'u']), str]), z.tuple([tick, z.literal('h')])]);
@@ -33,7 +40,7 @@ const sharedRun = z.strictObject({
   v: z.literal(1),
   c: str,
   cv: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
-  s: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  s: z.number().int().min(MIN_SEED).max(MAX_SEED),
   i: z
     .array(input)
     .max(MAX_INPUTS)
@@ -105,6 +112,8 @@ export function decodeRun(fragment: string, cases: Record<string, CaseFile>): De
   // a version newer than ours is a case this version of the game does not have
   if (!c || run.cv > c.version) return { ok: false, reason: 'unknown_case' };
   if (run.cv < c.version) return { ok: false, reason: 'old_version' };
+  // an input after the case's last tick could never be played
+  if (run.i.some(([t]) => t > c.maxTicks)) return { ok: false, reason: 'malformed' };
   return { ok: true, run };
 }
 

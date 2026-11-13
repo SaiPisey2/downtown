@@ -68,7 +68,8 @@ export function Hud() {
         </div>
       </div>
 
-      <div className="hud-clock" aria-label="Simulated time">
+      {/* a timer: named, and not read out on every tick (its live region is off) */}
+      <div className="hud-clock" role="timer" aria-label="Simulated time">
         <ClockIcon />
         <span>
           <span className="hud-k">Elapsed</span> <strong className="num">{clock(snap.tick)}</strong>

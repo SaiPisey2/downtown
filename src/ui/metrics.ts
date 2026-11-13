@@ -31,15 +31,18 @@ export function formatValue(metric: keyof NodeView, v: number): string {
   return whole.format(v);
 }
 
-/** How a building is doing, in one word. */
+/** How a building is doing, in one word. Full alone is strained; full and falling behind (a queue) is failing. */
 export function buildingHealth(v: NodeView | undefined): Health {
   if (!v) return 'ok';
-  if (v.errorRate > 0.05 || v.dropped > 0.5 || v.saturation >= 0.99) return 'bad';
+  if (v.errorRate > 0.05 || v.dropped > 0.5 || (v.saturation >= 0.99 && v.queue > 0.5)) return 'bad';
   if (v.saturation > 0.8 || v.retryArrivals > 0.5 || v.queue > 0.5 || v.errorRate > 0.01) return 'warn';
   return 'ok';
 }
 
 export const HEALTH_WORD: Record<Health, string> = { ok: 'Healthy', warn: 'Strained', bad: 'Failing' };
+
+/** The short status word a building's tile shows on the flat board. */
+export const STATUS_WORD: Record<Health, 'ok' | 'strained' | 'failing'> = { ok: 'ok', warn: 'strained', bad: 'failing' };
 
 /** A span of simulated seconds in plain words: "10 s", "1 min 30 s", "5 min". */
 export function duration(secs: number): string {

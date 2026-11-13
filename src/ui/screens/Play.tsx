@@ -224,10 +224,12 @@ export function Play() {
         ) : null}
       </div>
       {/* after the dock in the DOM: Tab goes HUD, dock, then the building labels */}
-      <Board insetLeft={chatOpen ? CHAT_SPACE : 0} insetRight={overlay || selected ? DOCK_SPACE : 0} />
-      <EndBanner />
-      <ReplayBanner />
-      <Toasts />
+      <main className="play-main">
+        <Board insetLeft={chatOpen ? CHAT_SPACE : 0} insetRight={overlay || selected ? DOCK_SPACE : 0} />
+        <EndBanner />
+        <ReplayBanner />
+        <Toasts />
+      </main>
       <ActionConfirm />
       <AwayNotice />
     </div>

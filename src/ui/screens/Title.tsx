@@ -8,7 +8,7 @@ import '../theme.css';
 import { clearHash, useScreenHeading } from './heading';
 
 /** Room the title text takes on the left; the city is centred in the rest. */
-const TEXT_SPACE = 560;
+const TEXT_SPACE = 680;
 
 /** The way in: the name, what the game is, Play and Tutorial, over the main case running quietly. */
 export function Title() {
@@ -40,7 +40,7 @@ export function Title() {
     <div className="play screen screen-title">
       <Board backdrop insetLeft={TEXT_SPACE} />
       <div className="screen-shade" aria-hidden="true" />
-      <section className="title-panel" aria-labelledby="title-h">
+      <main className="title-panel" aria-labelledby="title-h">
         <p className="title-kicker">
           <span className="hud-mark" aria-hidden="true" />
           An incident game
@@ -72,7 +72,7 @@ export function Title() {
             Tutorial
           </button>
         </div>
-      </section>
+      </main>
       <button
         ref={gear}
         type="button"

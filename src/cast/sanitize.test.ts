@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { cleanText } from './sanitize';
 
 /** Every character the cleaner must remove besides the C0 and C1 controls. */
-const INVISIBLE = [0x061c, ...range(0x200b, 0x200f), 0x2028, 0x2029, ...range(0x202a, 0x202e), ...range(0x2060, 0x2064), ...range(0x2066, 0x2069), 0xfeff];
+const INVISIBLE = [0x061c, 0x180e, 0xfff9, 0xfffa, 0xfffb, ...range(0x200b, 0x200f), 0x2028, 0x2029, ...range(0x202a, 0x202e), ...range(0x2060, 0x2064), ...range(0x2066, 0x2069), 0xfeff];
 
 function range(a: number, b: number): number[] {
   return Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -18,6 +18,25 @@ describe('cleanText', () => {
     const hidden = String.fromCodePoint(...INVISIBLE);
     expect(cleanText(`x${hidden}y`)).toBe('xy');
     for (const cp of INVISIBLE) expect(cleanText(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe('ab');
+  });
+
+  it('removes Unicode tag characters, the Mongolian vowel separator and the interlinear annotation marks', () => {
+    const tags = range(0xe0000, 0xe007f);
+    for (const cp of [...tags, 0x180e, 0xfff9, 0xfffa, 0xfffb]) {
+      expect(cleanText(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe('ab');
+    }
+    // a whole hidden tag sequence, as used to smuggle text past a reader
+    expect(cleanText(`ok${String.fromCodePoint(0xe0001, 0xe0068, 0xe0069, 0xe007f)}.`)).toBe('ok.');
+  });
+
+  it('keeps visible neighbours of the new ranges, and real astral characters', () => {
+    expect(cleanText('\u180D\u180F\uFFF8\uFFFC\u{E0080}\u{E0100}\u{1F600}')).toBe('\u180D\u180F\uFFF8\uFFFC\u{E0080}\u{E0100}\u{1F600}');
+  });
+
+  it('a tag character split across two chunks is not shown half-way', () => {
+    const tag = String.fromCodePoint(0xe0041);
+    expect(cleanText(`a${tag[0]}`)).toBe('a');
+    expect(cleanText(`a${tag}b`)).toBe('ab');
   });
 
   it('keeps visible neighbours of the hidden ranges', () => {
@@ -52,7 +71,7 @@ describe('cleanText', () => {
   });
 
   it('a cleaned prefix is a prefix of the cleaned whole, so streamed text can be cleaned as it grows', () => {
-    const whole = 'Volume\u202E is normal.\u0007 No attack.';
+    const whole = `Volume\u202E is normal.\u0007 No${String.fromCodePoint(0xe0001, 0xe0061)} attack.\u{1F600}`;
     let shown = '';
     for (let i = 1; i <= whole.length; i++) {
       const now = cleanText(whole.slice(0, i));

@@ -5,7 +5,7 @@ import { Board } from '../../scene/Board';
 import '../theme.css';
 import { useScreenHeading } from './heading';
 
-const TEXT_SPACE = 560;
+const TEXT_SPACE = 680;
 
 const HOW = [
   { n: '1', title: 'Inspect buildings', text: 'Pick a building to see its graphs, logs and recent changes.' },
@@ -26,7 +26,7 @@ export function Briefing() {
     <div className="play screen screen-briefing">
       <Board backdrop insetLeft={TEXT_SPACE} />
       <div className="screen-shade" aria-hidden="true" />
-      <section className="title-panel brief-panel" aria-labelledby="brief-h">
+      <main className="title-panel brief-panel" aria-labelledby="brief-h">
         <p className="eyebrow">{tutorial ? 'Tutorial · about 3 minutes' : 'Your case · about 15 minutes'}</p>
         <h1 id="brief-h" ref={heading} tabIndex={-1} className="brief-title">
           {c.title}
@@ -66,7 +66,7 @@ export function Briefing() {
             Back
           </button>
         </div>
-      </section>
+      </main>
     </div>
   );
 }

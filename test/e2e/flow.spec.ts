@@ -119,6 +119,9 @@ test('title, tutorial skipped, briefing, a won run, its debrief, and a share lin
   await expect(page.getByText('Link copied.', { exact: false })).toBeVisible();
   const url = await page.evaluate(() => navigator.clipboard.readText());
   expect(url).toMatch(/#r=[A-Za-z0-9_-]+$/);
+  // origin and path only: the test switch in this page's address is not passed on
+  expect(url).not.toContain('?');
+  expect(url).not.toContain('test=1');
   expect(url).not.toContain(DUMMY_KEY);
   expect(Buffer.from(url.split('#r=')[1]!, 'base64url').toString('utf8')).not.toContain(DUMMY_KEY);
   expect(await page.evaluate(() => JSON.stringify(window.__downtown!.state(), (_k, v) => (typeof v === 'function' ? undefined : v)))).not.toContain(DUMMY_KEY);
@@ -128,7 +131,8 @@ test('title, tutorial skipped, briefing, a won run, its debrief, and a share lin
   const viewer = await context.newPage();
   const viewerErrors = collectErrors(viewer);
   const viewerHosts = collectHosts(viewer);
-  await viewer.goto(url);
+  // the viewer gets the test hook added, so the test can read its state
+  await viewer.goto(url.replace('#r=', '?test=1#r='));
   await expect(viewer.getByRole('status').filter({ hasText: 'Watching a replay' })).toBeVisible();
   expect(await viewer.evaluate(() => window.__downtown!.state().replaying)).toBe(true);
   // the controls are off while it plays

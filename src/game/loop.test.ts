@@ -101,6 +101,14 @@ describe('pause', () => {
     expect(tick()).toBe(0);
   });
 
+  it('hiding the tab on the title screen does not freeze the city behind it', () => {
+    useGame.getState().showTitle();
+    onVisibility(true);
+    expect(useGame.getState().paused).toBe(false);
+    onVisibility(false);
+    expect(useGame.getState().paused).toBe(false);
+  });
+
   it('hiding does not overwrite a user pause', () => {
     useGame.getState().setPaused(true, 'user');
     onVisibility(true);

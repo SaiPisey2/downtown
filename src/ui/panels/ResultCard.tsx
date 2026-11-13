@@ -233,9 +233,9 @@ export function drawCard(canvas: HTMLCanvasElement, c: CaseFile, s: Score): void
 
 }
 
-/** The share link for a run: this page with the run in the fragment. */
+/** The share link for a run: this page with the run in the fragment. Origin and path only: no query string (such as a test switch) is passed on. */
 export function shareUrl(data: string): string {
-  return `${location.origin}${location.pathname}${location.search}#r=${data}`;
+  return `${location.origin}${location.pathname}#r=${data}`;
 }
 
 /**

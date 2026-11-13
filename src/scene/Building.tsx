@@ -21,6 +21,7 @@ import {
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CaseFile } from '../cases';
 import { useGame } from '../game/store';
+import { calmMotion } from './live';
 import { tint } from './mapping';
 import type { Vec3 } from './mapping';
 
@@ -331,7 +332,7 @@ function SelectionRing({ id }: { id: string }) {
   const selected = useGame((s) => s.selected === id);
   const mesh = useRef<Mesh>(null);
   useFrame(({ clock }) => {
-    if (mesh.current) mesh.current.scale.setScalar(1 + 0.03 * Math.sin(clock.elapsedTime * 3));
+    if (mesh.current) mesh.current.scale.setScalar(calmMotion() ? 1 : 1 + 0.03 * Math.sin(clock.elapsedTime * 3));
   });
   if (!selected) return null;
   return <mesh ref={mesh} geometry={ringGeo} material={ringMat} position={[0, 0.1, 0]} />;

@@ -96,7 +96,7 @@ export function Debrief() {
 
   return (
     <div className="play screen screen-debrief">
-      <div className="debrief">
+      <main className="debrief">
         <header className={`debrief-head debrief-${won ? 'ok' : 'bad'}`}>
           <p className="eyebrow">
             {replaying ? 'Replay · ' : ''}
@@ -215,7 +215,7 @@ export function Debrief() {
             Back to title
           </button>
         </ResultCard>
-      </div>
+      </main>
     </div>
   );
 }

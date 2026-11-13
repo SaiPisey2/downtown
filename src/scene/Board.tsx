@@ -19,7 +19,7 @@ import { Building } from './Building';
 import type { BuildingParts } from './Building';
 import { CameraRig } from './CameraRig';
 import { Effects } from './Effects';
-import { fps, live, resetLive } from './live';
+import { calmMotion, fps, live, resetLive } from './live';
 import {
   CAMERA,
   DISTRICTS,
@@ -34,7 +34,8 @@ import {
 import type { District, Vec3 } from './mapping';
 import { Roads } from './Roads';
 import { Traffic } from './Traffic';
-import { hasWebGL2 } from './webgl';
+import { BOARD_NAME, Flat2D } from './Flat2D';
+import { flatAsked, hasWebGL2 } from './webgl';
 
 const BACKGROUND = 'radial-gradient(ellipse 120% 90% at 50% 30%, #1a2950 0%, #0d1630 55%, #060a18 100%)';
 
@@ -211,16 +212,24 @@ type SceneStatsFn = import('../game/testHook').SceneProbe['sceneStats'];
 
 /** Per-second rate of the ease when a dock opens or closes. */
 const INSET_EASE = 8;
+/** Width of the city on screen, at the home view, as a share of the canvas height (the field of view is vertical). */
+const CITY_PER_HEIGHT = 1.0;
+/** Share of the free space the city may fill when it has to shrink to fit beside a menu. */
+const FIT_SHARE = 0.88;
 
 /**
  * Shifts the picture sideways so the middle of the city sits in the middle of
  * the space the docks leave free, while the canvas still fills the window.
+ * With `fit` (behind a menu's text), it also draws the city smaller when the
+ * free space is too narrow for it, so no building hides under the text.
  */
-function ViewInset({ left, right }: { left: number; right: number }) {
+function ViewInset({ left, right, fit }: { left: number; right: number; fit: boolean }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const shift = useRef(0);
-  const goal = (right - left) / 2;
+  const goal = (left - right) / 2;
+  const free = Math.max(1, size.width - left - right);
+  const zoom = fit ? Math.max(1, (size.height * CITY_PER_HEIGHT) / (free * FIT_SHARE)) : 1;
   useEffect(
     () => () => {
       if (camera instanceof PerspectiveCamera) camera.clearViewOffset();
@@ -229,12 +238,18 @@ function ViewInset({ left, right }: { left: number; right: number }) {
   );
   useFrame((_, dt) => {
     if (!(camera instanceof PerspectiveCamera)) return;
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * INSET_EASE);
+    const k = calmMotion() ? 1 : 1 - Math.exp(-Math.min(dt, 0.1) * INSET_EASE);
     const next = Math.abs(goal - shift.current) < 0.5 ? goal : shift.current + (goal - shift.current) * k;
+    const { width: W, height: H } = size;
+    // the window onto the full view: `zoom` times its size, placed so the city's middle lands `next` px right of centre
+    const w = W * zoom;
+    const h = H * zoom;
+    const x = W / 2 - (W / 2 + next) * zoom;
+    const y = (H - h) / 2;
     const v = camera.view;
-    if (v?.enabled && next === shift.current && v.fullWidth === size.width && v.fullHeight === size.height) return;
+    if (v?.enabled && v.offsetX === x && v.offsetY === y && v.width === w && v.height === h && v.fullWidth === W && v.fullHeight === H) return;
     shift.current = next;
-    camera.setViewOffset(size.width, size.height, next, 0, size.width, size.height);
+    camera.setViewOffset(W, H, x, y, w, h);
   });
   return null;
 }
@@ -310,7 +325,7 @@ function Scene({ c, onAccent, labels, wasDrag, inset, backdrop }: {
       <Traffic c={c} />
       <Effects c={c} parts={parts} />
       <CameraRig layout={c.layout} drift={backdrop} />
-      <ViewInset left={inset.left} right={inset.right} />
+      <ViewInset left={inset.left} right={inset.right} fit={backdrop} />
       {typeof window !== 'undefined' && window.__downtown && <Probe layout={c.layout} />}
     </>
   );
@@ -326,7 +341,10 @@ export interface BoardProps {
   backdrop?: boolean;
 }
 
-/** The 3D city for the current case: a function of the store, nothing else. */
+/**
+ * The city for the current case, a function of the store and nothing else: in
+ * 3D, or as the flat board when the browser has no WebGL2 or the address says `?flat=1`.
+ */
 export function Board({ onAccent, insetLeft = 0, insetRight = 0, backdrop = false }: BoardProps) {
   const caseId = useGame((s) => s.caseId);
   const c = caseId ? cases[caseId] : undefined;
@@ -335,19 +353,22 @@ export function Board({ onAccent, insetLeft = 0, insetRight = 0, backdrop = fals
   const press = useRef({ x: 0, y: 0, travel: 0 });
   const wasDrag = useCallback(() => press.current.travel > CLICK_SLOP, []);
 
-  if (!hasWebGL2()) {
+  if (!c || !home) return null;
+  const chosen = flatAsked();
+  if (chosen || !hasWebGL2()) {
     return (
-      <div data-testid="no-webgl" style={{ padding: 24, color: '#e9eef7', font: '15px system-ui, sans-serif' }}>
-        This board needs WebGL2, which this browser does not offer.
+      <div className="flat-screen" style={{ background: BACKGROUND }}>
+        <Flat2D c={c} insetLeft={insetLeft} insetRight={insetRight} backdrop={backdrop} chosen={chosen} />
       </div>
     );
   }
-  if (!c || !home) return null;
   return (
     <div
       data-testid="board"
       inert={backdrop}
       aria-hidden={backdrop || undefined}
+      role={backdrop ? undefined : 'region'}
+      aria-label={backdrop ? undefined : BOARD_NAME}
       style={{ position: 'absolute', inset: 0, background: BACKGROUND, pointerEvents: backdrop ? 'none' : undefined, isolation: backdrop ? 'isolate' : undefined }}
       onPointerDownCapture={(e) => {
         press.current = { x: e.clientX, y: e.clientY, travel: 0 };

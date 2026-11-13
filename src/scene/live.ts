@@ -57,12 +57,7 @@ export function fpsSamples(): number {
   return Math.min(frames, FPS_WINDOW);
 }
 
-let motionQuery: MediaQueryList | null | undefined;
-
-/** True when the player or the operating system asks for less motion. */
+/** True when the player asks for less motion (Settings; it starts from the system's preference). */
 export function calmMotion(): boolean {
-  if (motionQuery === undefined) {
-    motionQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-  }
-  return useGame.getState().reducedMotion || (motionQuery?.matches ?? false);
+  return useGame.getState().reducedMotion;
 }

@@ -96,6 +96,23 @@ let nextLineId = 1;
 /** the line now being written by each character; an older answer still arriving stops when it is replaced */
 const writing = new Map<string, number>();
 
+const MOTION_KEY = 'downtown.reduceMotion';
+
+/** Reduce motion as the tab starts: the player's choice made earlier in this tab, else the system's preference. */
+export function initialReducedMotion(): boolean {
+  try {
+    const saved = sessionStorage.getItem(MOTION_KEY);
+    if (saved === '1' || saved === '0') return saved === '1';
+  } catch {
+    // storage refused or missing: fall back to the system
+  }
+  try {
+    return matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Inputs of the replay still to be fed, oldest first. */
 let replayQueue: PlayerInput[] = [];
 
@@ -247,7 +264,7 @@ export const useGame = create<GameState>()((set, get) => ({
   selected: null,
   selectSeq: 0,
   homeSeq: 0,
-  reducedMotion: false,
+  reducedMotion: initialReducedMotion(),
   history: {},
   log: [],
   found: [],
@@ -444,9 +461,15 @@ export const useGame = create<GameState>()((set, get) => ({
   },
   setReducedMotion(on) {
     set({ reducedMotion: on });
+    try {
+      sessionStorage.setItem(MOTION_KEY, on ? '1' : '0');
+    } catch {
+      // storage refused or missing: the choice holds for this page only
+    }
   },
   finish() {
-    if (get().caseId === TUTORIAL_CASE) markTutorialDone();
+    // watching someone else's tutorial is not doing it
+    if (get().caseId === TUTORIAL_CASE && !get().replaying) markTutorialDone();
     set({ screen: 'debrief' });
   },
 }));

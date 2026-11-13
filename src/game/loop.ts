@@ -81,18 +81,24 @@ function tickRate(caseId: string): number {
   if (!c) throw new Error(`unknown case "${caseId}"`);
   return c.ticksPerSecond;
 }
-/** Hiding the tab pauses with reason 'hidden'; showing it again never resumes. */
+/**
+ * Hiding the tab during play pauses with reason 'hidden'; showing it again never
+ * resumes. Behind a menu nothing is being played, so the city there keeps moving.
+ */
 export function onVisibility(hidden: boolean): void {
   const s = useGame.getState();
-  if (hidden && !s.paused) s.setPaused(true, 'hidden');
+  if (hidden && !s.paused && s.screen === 'play') s.setPaused(true, 'hidden');
 }
 
-/** requestAnimationFrame driver plus the visibility handler. Browser only. */
-export function startLoop(): () => void {
+/**
+ * requestAnimationFrame driver plus the visibility handler. Browser only.
+ * While `idle()` says so (the window is too narrow to play), no time passes in the run.
+ */
+export function startLoop(idle: () => boolean = () => false): () => void {
   let raf = 0;
   let last: number | null = null;
   const frame = (t: number) => {
-    if (last !== null) advance(t - last);
+    if (last !== null && !idle()) advance(t - last);
     last = t;
     raf = requestAnimationFrame(frame);
   };
