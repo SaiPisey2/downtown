@@ -9,6 +9,7 @@ import { CHAT_SPACE, ChatDock, ChatPreview } from '../panels/Chat';
 import { ChangeLog } from '../panels/ChangeLog';
 import { EndBanner, Hud } from '../panels/Hud';
 import { Notebook } from '../panels/Notebook';
+import { Settings } from '../panels/Settings';
 import { Toasts } from '../panels/Toasts';
 import { useUi } from '../uiStore';
 import '../theme.css';
@@ -170,6 +171,8 @@ export function Play() {
           <ChangeLog onClose={closeDock} />
         ) : overlay === 'notebook' ? (
           <Notebook onClose={closeDock} />
+        ) : overlay === 'settings' ? (
+          <Settings onClose={closeDock} />
         ) : selected ? (
           <BuildingPanel key={`${selected}:${selectSeq}`} node={selected} onClose={closeDock} />
         ) : null}

@@ -1,4 +1,5 @@
 import { cases } from '../../cases';
+import { activeAiSettings, useLiveSettings } from '../../cast/settings';
 import { useGame } from '../../game/store';
 import { clock } from '../logs';
 import { duration } from '../metrics';
@@ -44,6 +45,7 @@ export function Hud() {
   const openChat = useUi((s) => s.openChat);
   const unread = useUi((s) => Object.values(s.unread).reduce((a, b) => a + b, 0));
   const toast = useUi((s) => s.toast);
+  const live = useLiveSettings((s) => activeAiSettings(s) !== null);
   const c = caseId ? cases[caseId] : undefined;
   if (!c || !snap) return null;
   const ended = snap.status !== 'running';
@@ -135,6 +137,18 @@ export function Hud() {
         >
           Notebook <span className="count">{found}</span>
         </button>
+        <button
+          type="button"
+          className="btn btn-hud btn-hud-icon"
+          data-opens="settings"
+          aria-pressed={overlay === 'settings'}
+          onClick={() => openOverlay(overlay === 'settings' ? null : 'settings')}
+          title={live ? 'Settings: live characters are on' : 'Settings: live characters with your own AI key'}
+        >
+          <GearIcon />
+          <span className="sr-only">Settings{live ? ', live characters on' : ''}</span>
+          {live && <span className="live-dot" aria-hidden="true" />}
+        </button>
       </nav>
 
       {snap.pending.length > 0 && (
@@ -150,6 +164,20 @@ export function Hud() {
         </ul>
       )}
     </header>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg className="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path
+        d="M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zm5.6 3.2-.1-1.6 1.3-1-1.3-2.3-1.6.5a5 5 0 0 0-1.4-.8L10.2 2H7.6l-.3 1.6c-.5.2-1 .5-1.4.8l-1.6-.5L3 6.2l1.3 1a5 5 0 0 0 0 1.6L3 9.8l1.3 2.3 1.6-.5c.4.3.9.6 1.4.8l.3 1.6h2.6l.3-1.6c.5-.2 1-.5 1.4-.8l1.6.5 1.3-2.3z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -101,6 +101,8 @@ function check(c: CaseFile): string[] {
   const stakeholders = c.cast.filter((m) => m.role === 'stakeholder');
   if (stakeholders.length > 1) issues.push(`at most one stakeholder, got ${stakeholders.map((m) => m.id).join(', ')}`);
   if (stakeholders.length) for (const k of STAKEHOLDER_LINES) lineKey(k, `stakeholder "${stakeholders[0]!.id}"`);
+  // said instead of a live answer when the player's own model cannot be reached
+  for (const m of c.cast) if (m.role === 'teammate') lineKey(`busy_${m.id}`, `teammate "${m.id}"`);
 
   for (const a of c.actions) {
     needNode(a.target, `action "${a.id}"`);

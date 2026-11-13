@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { cases } from '../cases';
-import { makeCast } from '../cast';
-import type { Cast, ChatLine } from '../cast';
+import { answerFor, cases } from '../cases';
+import { cleanText, makeCast } from '../cast';
+import type { Cast, CastHooks, ChatLine } from '../cast';
 import { createRun } from '../sim';
 import type { GameEvent, NodeId, Run, Snapshot } from '../sim';
 
@@ -31,13 +31,22 @@ export interface GameState {
   lastHint: { clueId: string | null; text: string | null } | null;
   /** every line said this run, all characters, oldest first */
   chat: ChatLine[];
+  /** the reviewer's comments on the finished run, as they arrive; never part of the score */
+  reviewText: string;
+  reviewState: 'idle' | 'streaming' | 'done' | 'failed';
   start(caseId: string, seed?: number): void;
   act(id: string): void;
   observe(route: string): void;
   update(id: string): void;
   hint(): void;
-  /** asks a character one of their questions; resolves once the answer has arrived in full */
-  ask(castId: string, questionId: string): Promise<void>;
+  /**
+   * Asks a character one of their questions, or (with `questionId` null) says
+   * something of the player's own to them. Resolves once the answer has arrived
+   * in full; never rejects.
+   */
+  ask(castId: string, questionId: string | null, freeText?: string): Promise<void>;
+  /** the reviewer's comments once the run is over, streamed; also kept in reviewText. Never throws. */
+  review(): AsyncIterable<string>;
   /** a line from the player, to a character when `to` is given */
   say(text: string, to?: string): void;
   setPaused(p: boolean, reason?: 'user' | 'hidden'): void;
@@ -63,6 +72,11 @@ let offered = 0;
 /** cast replies, kept in event order even when a reply takes time */
 let replies: Promise<void> = Promise.resolve();
 let nextLineId = 1;
+/** the line now being written by each character; an older answer still arriving stops when it is replaced */
+const writing = new Map<string, number>();
+
+/** Longest free-text line the player can send. */
+export const MAX_SAY = 300;
 
 function addLine(line: Omit<ChatLine, 'id'>): number {
   const id = nextLineId++;
@@ -72,6 +86,20 @@ function addLine(line: Omit<ChatLine, 'id'>): number {
 
 function patchLine(id: number, patch: Partial<ChatLine>): void {
   useGame.setState((s) => ({ chat: s.chat.map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
+}
+
+function dropLine(id: number): void {
+  useGame.setState((s) => ({ chat: s.chat.filter((l) => l.id !== id) }));
+}
+
+/** What the store lets a cast do besides answering: notices land in the thread, for the run that made them only. */
+function hooksFor(me: () => Cast | null): CastHooks {
+  return {
+    notice(castId, text) {
+      if (cast !== me()) return;
+      addLine({ tick: useGame.getState().snap?.tick ?? 0, from: 'system', to: castId, text: cleanText(text) });
+    },
+  };
 }
 
 /**
@@ -94,6 +122,8 @@ export function offerTick(run: Run): void {
       for (const l of out) addLine({ tick: l.tick, from: l.from, to: l.to, text: l.text });
     })
     .catch((err: unknown) => console.error('the cast failed to reply', err));
+  // the run is over: nothing still being asked is worth waiting for
+  if (events.some((e) => e.type === 'won' || e.type === 'lost')) me.stop?.();
 }
 
 export const useGame = create<GameState>()((set, get) => ({
@@ -115,14 +145,20 @@ export const useGame = create<GameState>()((set, get) => ({
   lastAction: null,
   lastHint: null,
   chat: [],
+  reviewText: '',
+  reviewState: 'idle',
 
   start(caseId, seed) {
     const c = cases[caseId];
     if (!c) throw new Error(`unknown case "${caseId}"`);
     const run = createRun(c, seed ?? c.seed);
-    cast = makeCast(c);
+    cast?.stop?.();
+    let made: Cast | null = null;
+    made = makeCast(c, hooksFor(() => made));
+    cast = made;
     offered = 0;
     replies = Promise.resolve();
+    writing.clear();
     set({
       screen: 'play',
       caseId,
@@ -136,6 +172,8 @@ export const useGame = create<GameState>()((set, get) => ({
       lastAction: null,
       lastHint: null,
       chat: [],
+      reviewText: '',
+      reviewState: 'idle',
       ...view(run),
     });
   },
@@ -167,29 +205,78 @@ export const useGame = create<GameState>()((set, get) => ({
     const c = run.hint();
     set({ lastHint: { clueId: c?.id ?? null, text: c?.text ?? null }, ...view(run) });
   },
-  async ask(castId, questionId) {
+  async ask(castId, questionId, freeText) {
     const s = get();
     const run = s.run;
     const me = cast;
     const c = s.caseId ? cases[s.caseId] : undefined;
-    const q = c?.cast.find((m) => m.id === castId)?.questions.find((x) => x.id === questionId);
-    if (!run || !me || !c || !q || run.snapshot.status !== 'running') return;
-    if (s.chat.some((l) => l.live && l.from === castId)) return; // one answer at a time
-    const tick = run.snapshot.tick;
-    s.say(q.label, castId);
-    const ctx = { c, snap: run.snapshot, found: [...s.found], chat: get().chat };
+    const member = c?.cast.find((m) => m.id === castId);
+    if (!run || !me || !c || !member || run.snapshot.status !== 'running') return;
+    const q = questionId === null ? undefined : member.questions.find((x) => x.id === questionId);
+    if (questionId !== null && !q) return;
+    const said = q ? q.label : cleanText((freeText ?? '').trim(), MAX_SAY).trim();
+    if (!said) return;
+    // a question waits for the answer before it; free text takes over from it
+    if (q && s.chat.some((l) => l.live && l.from === castId)) return;
+
+    // the answer and the clue are both decided now, against this one snapshot
+    const snap = run.snapshot;
+    const tick = snap.tick;
+    const fallback = q ? answerFor(c, castId, q.id, snap) : (c.lines[`busy_${castId}`] ?? '');
+    s.say(said, castId);
+    if (q?.reveals && !get().found.includes(q.reveals)) get().observe(`ask:${castId}:${q.id}`);
+
+    const ctx = { c, snap, found: [...get().found], chat: get().chat };
     const id = addLine({ tick, from: castId, text: '', live: true });
+    writing.set(castId, id);
+    const current = () => cast === me && writing.get(castId) === id;
     let text = '';
+    let failed = false;
     try {
-      for await (const chunk of me.ask(castId, questionId, null, ctx)) {
-        if (cast !== me) return;
+      for await (const chunk of me.ask(castId, q ? q.id : null, q ? null : said, ctx)) {
+        if (!current()) break;
         text += chunk;
         patchLine(id, { text });
       }
-    } finally {
-      if (cast === me) patchLine(id, { live: false });
+    } catch (err) {
+      failed = true;
+      if (current()) console.warn('the cast failed to answer; using the scripted line', err);
     }
-    if (q.reveals && !get().found.includes(q.reveals)) get().observe(`ask:${castId}:${questionId}`);
+    if (cast !== me) return;
+    const replaced = writing.get(castId) !== id;
+    if (!replaced) writing.delete(castId);
+    // never an empty line left behind: a failed or silent answer becomes the scripted line
+    const final = replaced ? text : failed || text === '' ? fallback || text : text;
+    if (final === '') dropLine(id);
+    else patchLine(id, { text: final, live: false });
+  },
+  review() {
+    const me = cast;
+    const s = get();
+    const run = s.run;
+    const c = s.caseId ? cases[s.caseId] : undefined;
+    if (!me?.review || !run || !c || run.snapshot.status === 'running' || s.reviewState !== 'idle') {
+      return (async function* () {})();
+    }
+    const stream = me.review({ c, final: run.snapshot, log: [...run.log], chat: s.chat });
+    set({ reviewState: 'streaming', reviewText: '' });
+    return (async function* () {
+      let text = '';
+      let failed = false;
+      try {
+        for await (const chunk of stream) {
+          if (cast !== me) return;
+          text += chunk;
+          set({ reviewText: text });
+          yield chunk;
+        }
+      } catch {
+        failed = true;
+      } finally {
+        // also when the reader stops early: the state never stays 'streaming'
+        if (cast === me) set({ reviewState: failed || !text.trim() ? 'failed' : 'done' });
+      }
+    })();
   },
   say(text, to) {
     const tick = get().snap?.tick ?? 0;

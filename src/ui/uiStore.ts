@@ -19,7 +19,7 @@ export interface ChatPreview {
 /** Interface state that is not part of the game: which dock is open, the confirm dialog, toasts, the chat dock. */
 export interface UiState {
   /** a city-wide view shown in the right dock in place of the building panel */
-  overlay: 'changes' | 'notebook' | null;
+  overlay: 'changes' | 'notebook' | 'settings' | null;
   /** the action waiting for Confirm, and the control to give focus back to */
   confirm: { actionId: string; returnTo: HTMLElement | null } | null;
   /** plain-words refusal shown under an action, by action id */
@@ -32,7 +32,7 @@ export interface UiState {
   /** lines not yet seen, by character */
   unread: Record<string, number>;
   preview: ChatPreview | null;
-  openOverlay(o: 'changes' | 'notebook' | null): void;
+  openOverlay(o: UiState['overlay']): void;
   askConfirm(actionId: string, returnTo: HTMLElement | null): void;
   closeConfirm(): void;
   refuse(actionId: string, text: string | null): void;

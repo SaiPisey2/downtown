@@ -100,6 +100,12 @@ describe('reference checks', () => {
     );
     expect(c.cast.every((m) => m.role === 'teammate')).toBe(true);
   });
+  it('every teammate needs a busy line, said when a live answer cannot be had', () => {
+    expectFail((d) => delete d.lines.busy_priya, `teammate "priya"`, 'missing line "busy_priya"');
+    for (const k of Object.values(cases)) {
+      for (const m of k.cast.filter((x) => x.role === 'teammate')) expect(k.lines[`busy_${m.id}`]).toBeTruthy();
+    }
+  });
   it('fails on an action aimed at a missing node', () => {
     expectFail((d) => (d.actions[0].target = 'harbour'), 'harbour', 'rollback');
   });

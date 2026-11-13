@@ -7,7 +7,7 @@ export interface ChatLine {
   tick: number;
   /** cast id | 'you' | 'system' */
   from: string;
-  /** who the player was talking to; only on the player's own lines */
+  /** whose thread the line belongs to: on the player's own lines, and on system notices about one character */
   to?: string;
   text: string;
   /** true while the text is still arriving */
@@ -43,4 +43,12 @@ export interface Cast {
   onTick?(snap: Snapshot): Promise<ChatLine[]>;
   ask(castId: string, questionId: string | null, freeText: string | null, ctx: CastContext): AsyncIterable<string>;
   review?(ctx: ReviewContext): AsyncIterable<string>;
+  /** stops anything still in flight; called when the run ends or is replaced */
+  stop?(): void;
+}
+
+/** What a cast can tell the store besides what its characters say. */
+export interface CastHooks {
+  /** one plain system line in `castId`'s thread, e.g. that live answers failed */
+  notice(castId: string, text: string): void;
 }

@@ -32,7 +32,7 @@ export interface CaseFile extends CaseModel {
       answerBefore?: string;
     }[];
   }[];
-  /** scripted lines by key (timeline messages, consequences, and the stakeholder's STAKEHOLDER_LINES) */
+  /** scripted lines by key (timeline messages, consequences, the stakeholder's STAKEHOLDER_LINES, and `busy_<id>` per teammate) */
   lines: Record<string, string>;
   debrief: { happened: string; realTeam: string; fictionNote: string };
 }

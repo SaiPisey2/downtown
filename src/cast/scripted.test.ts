@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { answerFor, cases } from '../cases';
 import type { CaseFile } from '../cases';
 import { createRun } from '../sim';
@@ -134,14 +134,23 @@ describe('scripted cast', () => {
   });
 
   it('waits between chunks only when given a delay', async () => {
-    const run = createRun(c);
-    const ctx = { c, snap: run.snapshot, found: [], chat: [] };
-    const t0 = Date.now();
-    await collect(scriptedCast(c).ask('netops', 'volume', null, ctx));
-    expect(Date.now() - t0).toBeLessThan(20);
-    const t1 = Date.now();
-    await collect(scriptedCast(c, { delayMs: 30 }).ask('netops', 'volume', null, ctx));
-    expect(Date.now() - t1).toBeGreaterThanOrEqual(25);
+    vi.useFakeTimers();
+    try {
+      const run = createRun(c);
+      const ctx = { c, snap: run.snapshot, found: [], chat: [] };
+      // no delay: done without any timer running
+      expect((await collect(scriptedCast(c).ask('netops', 'volume', null, ctx))).length).toBeGreaterThan(1);
+      let done = false;
+      const slow = collect(scriptedCast(c, { delayMs: 30 }).ask('netops', 'volume', null, ctx)).then(() => (done = true));
+      // the first piece alone waits half the delay
+      await vi.advanceTimersByTimeAsync(14);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(30);
+      await slow;
+      expect(done).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('the tutorial stakeholder speaks too', async () => {

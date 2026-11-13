@@ -318,6 +318,8 @@ cast:
     questions: []
 
 lines:
+  busy_netops: Give me a minute, I am in the middle of something. Use the questions below for now.
+  busy_devlead: Can't talk right now, I am pulling up the deploy list. Pick a question below and I will answer that.
   boss_attack: Customers say the whole site is down. Are we being attacked? What do I tell them?
   boss_still_down: It is still down for most people. I need an update I can pass on.
   filter_off_done: The filter is off on every edge machine. Requests go through unchecked for now.

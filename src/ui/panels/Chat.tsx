@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import { cases } from '../../cases';
 import type { CaseFile } from '../../cases';
 import type { ChatLine } from '../../cast';
-import { useGame } from '../../game/store';
+import { activeAiSettings, useLiveSettings } from '../../cast/settings';
+import { MAX_SAY, useGame } from '../../game/store';
 import { clock } from '../logs';
 import { useUi } from '../uiStore';
 import { CloseButton } from './ChangeLog';
@@ -51,6 +52,13 @@ function Thread({ m, lines }: { m: Member; lines: ChatLine[] }) {
           </li>
         )}
         {lines.map((l) => {
+          if (l.from === 'system') {
+            return (
+              <li key={l.id} className="msg msg-system">
+                <p className="msg-text">{l.text}</p>
+              </li>
+            );
+          }
           const mine = l.from === 'you';
           return (
             <li key={l.id} className={`msg ${mine ? 'msg-you' : 'msg-them'}`}>
@@ -156,7 +164,45 @@ function Replies({ c, m, lines, ended }: { c: CaseFile; m: Member; lines: ChatLi
           ))}
         </ul>
       )}
+      <FreeText m={m} ended={ended} />
     </div>
+  );
+}
+
+/** A line of the player's own to a teammate, shown only while live characters are on. */
+function FreeText({ m, ended }: { m: Member; ended: boolean }) {
+  const live = useLiveSettings((s) => activeAiSettings(s) !== null);
+  const ask = useGame((s) => s.ask);
+  const [draft, setDraft] = useState('');
+  if (!live) return null;
+  const send = (e: FormEvent) => {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text || ended) return;
+    setDraft('');
+    void ask(m.id, null, text);
+  };
+  const id = `say-${m.id}`;
+  return (
+    <form className="say" onSubmit={send}>
+      <label htmlFor={id} className="sr-only">
+        Message {m.name}
+      </label>
+      <input
+        id={id}
+        className="say-input"
+        type="text"
+        autoComplete="off"
+        maxLength={MAX_SAY}
+        placeholder={`Ask ${m.name} anything`}
+        value={draft}
+        disabled={ended}
+        onChange={(e) => setDraft(e.target.value)}
+      />
+      <button type="submit" className="btn btn-primary btn-send" disabled={ended || !draft.trim()}>
+        Send
+      </button>
+    </form>
   );
 }
 

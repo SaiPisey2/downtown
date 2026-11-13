@@ -117,6 +117,7 @@ cast:
     knows: []
     questions: []
 lines:
+  busy_priya: Sorry, I'm busy with the shop. Pick one of the questions below for now.
   priya_ping: Orders are timing out on my side. Can you look at the shop?
   restart_bad: Restarting the ledger dropped the orders it was writing. Nothing improved.
   nudge: Customers are asking about their orders. What should I tell them?
