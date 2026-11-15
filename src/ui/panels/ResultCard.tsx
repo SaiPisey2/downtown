@@ -29,6 +29,14 @@ export function deductions(s: Score): { name: string; points: number; says?: str
   return out;
 }
 
+/** The deductions as one line for the card, with a note when the total was held at 0 rather than going negative. */
+export function deductionLine(s: Score): string {
+  const off = deductions(s);
+  if (off.length === 0) return '';
+  const sum = SCORE_PARTS.reduce((a, p) => a + s[p.key], 0) + off.reduce((a, d) => a + d.points, 0);
+  return off.map((d) => `${d.name}: ${signed(d.points)}`).join('  ·  ') + (sum < 0 ? ' (never below 0)' : '');
+}
+
 /** A signed whole number with a real minus sign: "−8", "+3", "0". */
 export const signed = (n: number): string => (n < 0 ? `−${-n}` : n > 0 ? `+${n}` : '0');
 
@@ -203,11 +211,11 @@ export function drawCard(canvas: HTMLCanvasElement, c: CaseFile, s: Score): void
   ctx.fillStyle = C.dim;
   ctx.fillText(timeLine(c, s), left, y + 44);
   // what came off the five parts, so they visibly add up to the total
-  const off = deductions(s);
-  if (off.length > 0) {
+  const off = deductionLine(s);
+  if (off) {
     ctx.fillStyle = C.faint;
     ctx.font = `500 18px ${FONT}`;
-    ctx.fillText(off.map((d) => `${d.name}: ${signed(d.points)}`).join('  ·  '), left, y + 74);
+    ctx.fillText(off, left, y + 74);
   }
 
   // the parts

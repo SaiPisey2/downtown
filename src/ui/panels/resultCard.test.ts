@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Score } from '../../sim';
-import { SCORE_PARTS, deductions, shareUrl, signed } from './ResultCard';
+import { SCORE_PARTS, deductionLine, deductions, shareUrl, signed } from './ResultCard';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -32,5 +32,16 @@ describe('deductions', () => {
 
   it('writes signed numbers with a real minus sign', () => {
     expect([signed(-8), signed(0), signed(3)]).toEqual(['−8', '0', '+3']);
+  });
+});
+
+describe('deductionLine', () => {
+  const lost = { total: 0, detect: 0, recover: 0, traffic: 0, harm: 15, updates: 0, shortcut: 0, outcome: 'lost' as const, ticks: 2121, hints: 9 };
+  it('says the total never goes below 0 when the deductions would take it there', () => {
+    expect(deductionLine(lost)).toBe('9 hints used: −27 (never below 0)');
+  });
+  it('adds no note when the parts and deductions already equal the total', () => {
+    expect(deductionLine({ ...lost, hints: 2, total: 9 })).toBe('2 hints used: −6');
+    expect(deductionLine({ ...lost, hints: 0, total: 15 })).toBe('');
   });
 });
