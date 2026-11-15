@@ -31,7 +31,7 @@ timeline:
       target: shop
       mul: { capacityMul: 0.5 }
       while: { metric: shop.flag:build, op: "==", value: v2 }
-  - { at: 16, kind: message, from: priya, lineKey: priya_ping, when: { metric: city.errorRate, op: ">", value: 0.05 } }
+  - { at: 17, kind: message, from: priya, lineKey: priya_ping, when: { metric: city.errorRate, op: ">", value: 0.05 } }
 actions:
   - id: rollback
     target: shop

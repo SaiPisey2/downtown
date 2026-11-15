@@ -84,6 +84,16 @@ describe('tutorial case', () => {
   });
 });
 
+describe('tutorial teammate', () => {
+  it('pings the player once the shop starts failing', () => {
+    const run = createRun(cases.tutorial!);
+    run.step(40);
+    const pings = run.log.filter((e) => e.type === 'message' && e.lineKey === 'priya_ping');
+    expect(pings).toHaveLength(1);
+    expect(pings[0]!.tick).toBeLessThanOrEqual(20);
+  });
+});
+
 describe('reference checks', () => {
   it('fails on a missing scripted line', () => {
     expectFail((d) => delete d.lines.priya_ping, 'priya_ping');
