@@ -2,9 +2,13 @@
 
 Downtown is a browser game about being on call. A production system is drawn as a small city at night: visitors come in through the gate as streams of light, buildings are services, roads are the calls between them. Something breaks and the city starts to go dark. You look at graphs and logs, ask your teammates, keep your boss told, and pick the fix. A case takes five to ten minutes. There is no account and no server; the whole game runs in your browser.
 
+![A case from start to fix: the edge turns red, clues are found, the filter is switched off and traffic comes back](assets/demo.gif)
+
 ## Play
 
-Run it locally:
+In your browser: <https://saipisey2.github.io/downtown/>. It needs a desktop browser at least 900 px wide.
+
+Or run it locally:
 
 ```
 git clone https://github.com/SaiPisey2/downtown.git
@@ -21,6 +25,10 @@ then open the address it prints (http://127.0.0.1:5173).
 3. Act: actions sit on each building's Actions tab, say what they risk, and take time to land.
 4. Update the boss: she asks what to tell customers; honest updates count, spin earns nothing.
 5. Debrief: a score in five parts, a timeline of your run, what really happened, and a link that replays your run.
+
+| Looking into a failing building | The debrief |
+| --- | --- |
+| ![The Edge building selected, its graphs showing saturation at 100 percent, and a clue found](assets/play.png) | ![The debrief: outcome, score in five parts, and the timeline of the run](assets/debrief.png) |
 
 ## The first case
 
